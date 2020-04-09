@@ -6,13 +6,18 @@ objects.
 cmdoret, 20200404
 """
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import cooler
 import chromosight.utils.preprocessing as cup
-import pareidolia.io as pio
+import chromosight.utils.detection as cud
+import chromosight.utils.io as cio
+import chromosight.kernels as ck
+import pareidolia.io as pai
+import pareidolia.preprocess as pap
+import pareidolia.detection as pad
 
 
 def get_min_contacts(
@@ -69,23 +74,147 @@ def preprocess_hic(
     return mat
 
 
+def coords_to_bins(clr: cooler.Cooler, coords: pd.DataFrame) -> np.ndarray:
+    """
+        Converts genomic coordinates to a list of bin ids based on the whole genome
+        contact map.
+
+        Parameters
+        ----------
+        coords : pandas.DataFrame
+            Table of genomic coordinates, with columns chrom, pos.
+
+        Returns
+        -------
+        numpy.array of ints :
+            Indices in the whole genome matrix contact map.
+
+        """
+    coords.pos = (coords.pos // clr.binsize) * clr.binsize
+    # Coordinates are merged with bins, both indices are kept in memory so that
+    # the indices of matching bins can be returned in the order of the input
+    # coordinates
+    idx = (
+        clr.bins()[:]
+        .reset_index()
+        .rename(columns={"index": "bin_idx"})
+        .merge(
+            coords.reset_index().rename(columns={"index": "coord_idx"}),
+            left_on=["chrom", "start"],
+            right_on=["chrom", "pos"],
+            how="right",
+        )
+        .set_index("bin_idx")
+        .sort_values("coord_idx")
+        .index.values
+    )
+    return idx
+
+
 def change_detection_pipeline(
     cool_files: Iterable[str],
     conditions: Iterable[str],
-    bed2d_file: Optional[str],
-    region: str = None,
+    kernel: Union[np.ndarray, str] = "loops",
+    bed2d_file: Optional[str] = None,
+    region: Optional[str] = None,
+    max_dist: Optional[int] = None,
 ) -> pd.DataFrame:
     """
-    Run end to end change detection pipeline on input cool files. A list of
-    conditions of the same lengths as the sample list must be provided.
+    Run end to end pattern change detection pipeline on input cool files. A
+    list of conditions of the same lengths as the sample list must be provided.
+
+    Changes for a specific pattern are computed. A valid chromosight pattern
+    name can be supplied (e.g. loops, borders, hairpins, ...) or a kernel matrix
+    can be supplied directly instead.
+
     Positions with significant changes will be reported in a pandas
     dataframe. Optionally, a 2D bed file with positions of interest can be
-    specified, in which case
+    specified, in which case change value at these positions will be reported
+    instead.
     """
+    # Make sure each sample has an associated condition
     if len(cool_files) != len(conditions):
         raise ValueError(
             "The lists of cool files and conditions must have the same length"
         )
+
+    # If a pattern name was provided, load corresponding chromosight kernel
+    if isinstance(kernel, str):
+        kernel = getattr(ck, kernel)["kernels"][0]
+    # Associate samples with their conditions
     samples = pd.DataFrame(
-        {"cond": conditions, "cool": pio.get_cools(cool_files)}
+        {"cond": conditions, "cool": pai.get_coolers(cool_files)}
     )
+    # Remember condition values in a fixed order
+    conditions = np.unique(conditions)
+    # Compute number of contats in the matrix with the lowest coverage
+    min_contacts = get_min_contacts(samples.cool, region=region)
+    # Preprocess all matrices (subsample, balance, detrend)
+    samples["mat"] = samples.cool.apply(
+        lambda clr: preprocess_hic(
+            clr, min_contacts=min_contacts, region=region
+        )
+    )
+    # Retrieve the indices of bins which are valid in all samples (not missing
+    # because of repeated sequences or low coverage)
+    common_bins = pap.get_common_valid_bins(samples.mat)
+    # Generate a missing mask from these bins
+    missing_mask = cup.make_missing_mask(
+        samples.mat[0].shape,
+        common_bins,
+        common_bins,
+        max_dist=max_dist,
+        sym_upper=True,
+    )
+    # Remove all missing values form each sample's matrix
+    samples.mat = samples.mat.apply(
+        lambda mat: cup.erase_missing(sp.triu(mat), common_bins, common_bins)
+    )
+    # Generate correlation maps for all samples using chromosight's algorithm
+    samples["corr"] = samples.mat.apply(
+        lambda mat: cud.normxcorr2(
+            mat, kernel, full=True, missing_mask=missing_mask, sym_upper=True,
+        )
+    )
+    # Get the union of nonzero coordinates across all samples
+    total_nnz_set = pap.get_nnz_set(samples["corr"], mode="union")
+    # Store explicit zeros at these coordinates
+    samples["corr"] = samples["corr"].apply(
+        lambda cor: pap.fill_nnz(cor, total_nnz_set)
+    )
+    # Compute background for each condition
+    backgrounds = samples.groupby("cond")["corr"].apply(pad.median_bg)
+    # Get the distribution of difference to background within each condition
+    within_diffs = np.hstack(
+        samples.groupby("cond")["corr"].apply(pad.reps_bg_diff)
+    )
+    # Use average difference to first background as change metric
+    diff = sp.csr_matrix(backgrounds[0].shape)
+    for c in conditions[1:]:
+        diff += backgrounds[c] - backgrounds[conditions[0]]
+    diff.data /= len(backgrounds) - 1
+    # Apply threshold to differences based on within-condition variations
+    thresh = np.percentile(abs(within_diffs[within_diffs != 0]), 95)
+    diff.data[np.abs(diff.data) < thresh] = 0.0
+    # If positions were provided, return the change value for each of them
+    if bed2d_file:
+        positions = cio.load_bed2d(bed2d_file)
+        # Convert both coordinates from genomic coords to bins
+        for i in [1, 2]:
+            positions["pos"] = (
+                positions[f"start{i}"] + positions[f"end{i}"]
+            ) // 2
+            positions.chrom = positions[f"chrom{i}"]
+            positions[f"bin{i}"] = coords_to_bins(
+                samples.cool.values[0], positions
+            )
+        # Retrieve diff values for each coordinate
+        positions["diff"] = positions.apply(
+            lambda p: diff[p.bin1, p.bin2], axis=0
+        )
+        # Subset positions to region of interest
+    # Otherwise report individual spots of change using chromosight
+    else:
+        positions, _ = cud.picker(abs(diff), thresh)
+        positions = pd.DataFrame(positions)
+    return positions
