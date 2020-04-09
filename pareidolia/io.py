@@ -8,7 +8,7 @@ cmdoret, 20200406
 from typing import Iterable
 import cooler
 
-def get_cools(path_list: Iterable[str]):
+def get_coolers(path_list: Iterable[str]):
     """
     Load multiple cool files, ensuring they have the same resolution and
     shape.
@@ -25,10 +25,10 @@ def get_cools(path_list: Iterable[str]):
             binsize = clr.binsize
         # Check if format of next files is identical
         else:
-            if clr.shape != shape:
-                raise ValueError("Shapes are inconsistent.")
             if clr.binsize != binsize:
                 raise ValueError("Resolutions are inconsistent.")
+            if clr.shape != shape:
+                raise ValueError("Shapes are inconsistent.")
         cools[i] = clr
 
     return cools

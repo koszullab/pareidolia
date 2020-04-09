@@ -4,11 +4,12 @@
 Functions used for change detection.
 cmdoret, 20200403
 """
-import scipy.sparse as  sp
+from typing import Iterable
+import scipy.sparse as sp
 import numpy as np
 
 
-def median_bg(*mats: sp.spmatrix) -> sp.spmatrix:
+def median_bg(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
     """
     Given multiple sparse matrices with the same shape, format
     and nonzero coordinates, generate a background matrix made
@@ -24,28 +25,28 @@ def median_bg(*mats: sp.spmatrix) -> sp.spmatrix:
     return bg
 
 
-def reps_bg_diff(*mats: sp.spmatrix) -> np.ndarray:
+def reps_bg_diff(mats: Iterable[sp.spmatrix]) -> np.ndarray:
     """
     Given multiple sample matrices, return a 1D array of all differences
     between each sample matrix's pixels and their corresponding median
     background value. All input matrices must have the same shape, nonzero
     coordinates and format.
     """
-    bg = median_bg(*mats)
+    bg = median_bg(mats)
     diffs = [m.data - bg.data for m in mats]
     diffs = np.hstack(diffs)
     return diffs
 
 
-def get_sse_mat(*mats: sp.spmatrix) -> sp.spmatrix:
+def get_sse_mat(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
     """
-    Given multiple matrices, return the matrix of the matrix of
-    position-wise sum of squared errors to median. All input matrices
-    must have the same shape, nonzero coordinates and format. Output
-    matrix will have the same format as inputs.
+    Given multiple matrices, return the matrix of position-wise sum of
+    squared errors to median. All input matrices must have the same shape,
+    nonzero coordinates and format. Output matrix will have the same format
+    as inputs.
     """
     bg = median_bg(*mats)
     sse = bg.copy()
-    se = np.array([(m.data - bg.data)**2 for m in mats])
+    se = np.array([(m.data - bg.data) ** 2 for m in mats])
     sse.data = np.sum(se, axis=0)
     return sse
