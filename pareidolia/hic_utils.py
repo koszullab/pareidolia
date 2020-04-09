@@ -6,6 +6,7 @@ objects.
 cmdoret, 20200404
 """
 
+import sys
 from typing import Iterable, Optional, Union
 import numpy as np
 import pandas as pd
@@ -54,17 +55,24 @@ def preprocess_hic(
     """
     # Load raw matrix and subset region if requested
     mat = clr.matrix(sparse=True, balance=False)
+    bins = clr.bins()
     if region is None:
         mat = mat[:]
+        bins = bins[:]
     else:
         mat = mat.fetch(region)
+        bins = bins.fetch(region)
+    try:
+        biases = bins["weight"].values
+    except KeyError as err:
+        sys.stderr.write("Error: Input cooler must be balanced.\n")
+        raise err
     # get to same coverage
     if min_contacts is not None:
         mat = cup.subsample_contacts(mat, min_contacts).tocoo()
     valid = cup.get_detectable_bins(mat, n_mads=5)
 
     # balance region with weights precomputed on the whole matrix
-    biases = clr.bins().fetch(region)["weight"].values
     mat.data = mat.data * biases[mat.row] * biases[mat.col]
     # Detrend for P(s)
     mat = cup.detrend(mat.tocsr(), smooth=True, detectable_bins=valid[0])
@@ -174,7 +182,7 @@ def change_detection_pipeline(
     samples["corr"] = samples.mat.apply(
         lambda mat: cud.normxcorr2(
             mat, kernel, full=True, missing_mask=missing_mask, sym_upper=True,
-        )
+        )[0]
     )
     # Get the union of nonzero coordinates across all samples
     total_nnz_set = pap.get_nnz_set(samples["corr"], mode="union")
@@ -183,10 +191,14 @@ def change_detection_pipeline(
         lambda cor: pap.fill_nnz(cor, total_nnz_set)
     )
     # Compute background for each condition
-    backgrounds = samples.groupby("cond")["corr"].apply(pad.median_bg)
+    backgrounds = samples.groupby("cond")["corr"].apply(
+        lambda g: pad.median_bg(g.reset_index(drop=True))
+    )
     # Get the distribution of difference to background within each condition
     within_diffs = np.hstack(
-        samples.groupby("cond")["corr"].apply(pad.reps_bg_diff)
+        samples.groupby("cond")["corr"].apply(
+            lambda g: pad.reps_bg_diff(g.reset_index(drop=True))
+        )
     )
     # Use average difference to first background as change metric
     diff = sp.csr_matrix(backgrounds[0].shape)

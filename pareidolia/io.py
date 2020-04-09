@@ -15,8 +15,9 @@ def get_coolers(path_list: Iterable[str]):
     """
     cools = [None] * len(path_list)
     # Do not attempt loading if input is a single path
-    if isinstance(cools, str):
+    if isinstance(path_list, str):
         raise TypeError("Input must be an iterable of strings.")
+
     for i, cool in enumerate(path_list):
         clr = cooler.Cooler(cool)
         # Use the first cool file to define expected format
