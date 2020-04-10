@@ -12,8 +12,8 @@ matrix:
 os:
 - linux
 install:
+- pip install Cython codecov pytest pysam pytest-cov pylint pytest-pylint virtualenv tox
 - pip install -v -Ur requirements.txt
-- pip install codecov pytest pytest-cov pylint pytest-pylint virtualenv tox
 - pip install -e .
 script:
 - tox
