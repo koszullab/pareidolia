@@ -20,10 +20,11 @@ install:
 - conda config --add channels bioconda
 - conda update -q conda
 - conda info -a
-- conda create -c conda-forge -q -n test-environment python="$TRAVIS_PYTHON_VERSION"  pytest  pytest-cov codecov  cooler
+- conda create -c conda-forge -q -n test-environment python="$TRAVIS_PYTHON_VERSION"  pytest  codecov  cooler
+- pip install pytest-cov
 - pip install -v -Ur requirements.txt
 - pip install -e .
 script:
-- pytest tests
+- pytest --cov=pareidolia tests
 after_success:
 - codecov
