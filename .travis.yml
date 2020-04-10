@@ -1,0 +1,21 @@
+language: python
+env:
+  global:
+  - PROJECT_NAME=pareidolia
+  - GITHUB_REPO_NAME=cmdoret/pareidolia
+matrix:
+  include:
+  - python: '3.6'
+  - python: '3.7'
+    dist: xenial
+    sudo: true
+os:
+- linux
+install:
+- pip install -v -Ur requirements.txt
+- pip install codecov pytest pytest-cov pylint pytest-pylint virtualenv tox
+- pip install -e .
+script:
+- tox
+after_success:
+- codecov
