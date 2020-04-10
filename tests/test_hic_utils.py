@@ -5,6 +5,7 @@
 Unit tests for functions in hic_utils.py
 cmdoret, 20200407
 """
+import itertools as it
 import pathlib
 import pytest
 import numpy as np
@@ -14,8 +15,11 @@ import pareidolia.hic_utils as pah
 import pareidolia.io as pai
 
 DATA = pathlib.Path("data_test")
+# Synthetic matrices and their known loop coordinates
 COOLS = [str(c) for c in DATA.glob("A_[1-6]*.cool")]
-COOLS_COMP = [str(c) for c in DATA.glob("B_[1-6]*.cool")]
+LOOPS = np.loadtxt(DATA / 'A_loops.txt')
+# Matrices with a diagonal gradient
+COOLS_COMP = [str(c) for c in DATA.glob("smooth_[1-6]*.cool")]
 COOL_IN = ('cool', COOLS)
 REGION = 'chr0:100000-120000'
 
@@ -53,8 +57,20 @@ def test_coords_to_bins():
     np.testing.assert_equal(obs_idx, exp_idx)
 
 def test_change_detection_pipeline():
-    """Test if change detection pipeline works without errors"""
+    """Test if change detection pipeline finds some relevant positions"""
+    # Run loop change detection between matrices with and without loops
     cools = COOLS + COOLS_COMP
     conds = ["A"] * len(COOLS) + ["B"] * len(COOLS_COMP)
-    pah.change_detection_pipeline(cools, conds)
-    
+    obs_pos = pah.change_detection_pipeline(cools, conds, subsample=False, percentile_thresh=95)
+    # Build a set of fuzzy (+/3 pixels around) positions found
+    valid_pos = set()
+    for pos in obs_pos.loc[:, ['bin1', 'bin2']].values:
+        for shift in it.combinations(range(-3, 4), 2):
+            valid_pos.add((pos[0] + shift[0], pos[1] + shift[1]))
+    # Count the number of real loop positions that were found
+    found = 0
+    for target in LOOPS:
+        if tuple(target.astype(int)) in valid_pos:
+            found += 1
+    assert found / LOOPS.shape[0] >= 0.5
+
