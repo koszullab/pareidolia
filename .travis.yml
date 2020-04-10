@@ -20,11 +20,10 @@ install:
 - conda config --add channels bioconda
 - conda update -q conda
 - conda info -a
-- conda create -c conda-forge -q -n test-environment python="$TRAVIS_PYTHON_VERSION"  pytest  pytest-cov  pylint  codecov  cooler
+- conda create -c conda-forge -q -n test-environment python="$TRAVIS_PYTHON_VERSION"  pytest  pytest-cov codecov  cooler
 - pip install -v -Ur requirements.txt
 - pip install -e .
 script:
-- pytest --pylint --pylint-error-types=EF --pylint-rcfile=.pylintrc pareidolia
-- pytest --cov=pareidolia
+- pytest tests
 after_success:
 - codecov
