@@ -126,6 +126,8 @@ def change_detection_pipeline(
     bed2d_file: Optional[str] = None,
     region: Optional[str] = None,
     max_dist: Optional[int] = None,
+    subsample: bool = True,
+    percentile_thresh: float = 95,
 ) -> pd.DataFrame:
     """
     Run end to end pattern change detection pipeline on input cool files. A
@@ -155,8 +157,19 @@ def change_detection_pipeline(
     )
     # Remember condition values in a fixed order
     conditions = np.unique(conditions)
-    # Compute number of contats in the matrix with the lowest coverage
-    min_contacts = get_min_contacts(samples.cool, region=region)
+    # Define range of interest from region
+    clr = samples.cool.values[0]
+    if region is None:
+        s, e = 0, clr.shape[0]
+        bins = clr.bins()[:]
+    else:
+        s, e = clr.extent(region)
+        bins = clr.bins().fetch(region).reset_index(drop=True)
+    # Compute number of contacts in the matrix with the lowest coverage
+    if subsample:
+        min_contacts = get_min_contacts(samples.cool, region=region)
+    else:
+        min_contacts = None
     # Preprocess all matrices (subsample, balance, detrend)
     samples["mat"] = samples.cool.apply(
         lambda clr: preprocess_hic(
@@ -206,7 +219,9 @@ def change_detection_pipeline(
         diff += backgrounds[c] - backgrounds[conditions[0]]
     diff.data /= len(backgrounds) - 1
     # Apply threshold to differences based on within-condition variations
-    thresh = np.percentile(abs(within_diffs[within_diffs != 0]), 95)
+    thresh = np.percentile(
+        abs(within_diffs[within_diffs != 0]), percentile_thresh
+    )
     diff.data[np.abs(diff.data) < thresh] = 0.0
     # If positions were provided, return the change value for each of them
     if bed2d_file:
@@ -217,16 +232,42 @@ def change_detection_pipeline(
                 positions[f"start{i}"] + positions[f"end{i}"]
             ) // 2
             positions.chrom = positions[f"chrom{i}"]
-            positions[f"bin{i}"] = coords_to_bins(
-                samples.cool.values[0], positions
-            )
-        # Retrieve diff values for each coordinate
-        positions["diff"] = positions.apply(
-            lambda p: diff[p.bin1, p.bin2], axis=0
-        )
+            positions[f"bin{i}"] = coords_to_bins(clr, positions)
+        positions = positions.drop(columns=["pos", "chrom"])
         # Subset positions to region of interest
     # Otherwise report individual spots of change using chromosight
     else:
+        # Pick "foci" of changed pixels and their local maxima
         positions, _ = cud.picker(abs(diff), thresh)
-        positions = pd.DataFrame(positions)
+        # Get genomic positions from matrix coordinates
+        positions = pd.DataFrame(positions, columns=["bin1", "bin2"])
+        for i in [1, 2]:
+            coords = (
+                bins.loc[positions[f"bin{i}"], ["chrom", "start", "end"]]
+                .reset_index(drop=True)
+                .rename(
+                    columns={
+                        "chrom": f"chrom{i}",
+                        "start": f"start{i}",
+                        "end": f"end{i}",
+                    }
+                )
+            )
+            positions = pd.concat([coords, positions], axis=1)
+    # Retrieve diff values for each coordinate
+    positions["diff"] = positions.apply(lambda p: diff[p.bin1, p.bin2], axis=1)
+    positions = positions.loc[
+        :,
+        [
+            "chrom1",
+            "start1",
+            "end1",
+            "chrom2",
+            "start2",
+            "end2",
+            "bin1",
+            "bin2",
+            "diff",
+        ],
+    ]
     return positions

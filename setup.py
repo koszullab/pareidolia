@@ -31,10 +31,14 @@ setup(
 
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
+        "Intended Audience :: Science/Research",
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
+        "Topic :: Scientific/Engineering",
+        "Topic :: Scientific/Engineering :: Bio-Informatics",
+        "Operating System :: OS Independent",
     ],
 )
