@@ -34,13 +34,6 @@ def get_common_valid_bins(
     return np.array(list(common_valid))
 
 
-def get_correlation(mat: sp.csr_matrix, kernel: np.ndarray) -> sp.csr_matrix:
-    """Get the pearson coefficient map between input matrix and kernel."""
-    return cud.normxcorr2(
-        mat, kernel, full=False, missing_mask=None, sym_upper=True, max_dist=50
-    )
-
-
 def yield_nnz(mat: sp.spmatrix) -> Iterator[Tuple[int]]:
     """
     Helper function to extract nonzero values from a scipy.sparse matrix and

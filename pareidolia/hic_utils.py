@@ -75,7 +75,7 @@ def preprocess_hic(
     # balance region with weights precomputed on the whole matrix
     mat.data = mat.data * biases[mat.row] * biases[mat.col]
     # Detrend for P(s)
-    mat = cup.detrend(mat.tocsr(), smooth=True, detectable_bins=valid[0])
+    mat = cup.detrend(mat.tocsr(), smooth=False, detectable_bins=valid[0])
     # Replace NaNs by 0s
     mat.data = np.nan_to_num(mat.data)
     mat.eliminate_zeros()
@@ -119,52 +119,18 @@ def coords_to_bins(clr: cooler.Cooler, coords: pd.DataFrame) -> np.ndarray:
     return idx
 
 
-def change_detection_pipeline(
-    cool_files: Iterable[str],
-    conditions: Iterable[str],
-    kernel: Union[np.ndarray, str] = "loops",
-    bed2d_file: Optional[str] = None,
+def detection_matrix(
+    samples: pd.DataFrame,
+    kernel: np.ndarray,
     region: Optional[str] = None,
+    subsample: Optional[int] = None,
     max_dist: Optional[int] = None,
-    subsample: bool = True,
-    percentile_thresh: float = 95,
-) -> pd.DataFrame:
+    percentile_thresh: float = 95.0,
+):
     """
-    Run end to end pattern change detection pipeline on input cool files. A
-    list of conditions of the same lengths as the sample list must be provided.
-
-    Changes for a specific pattern are computed. A valid chromosight pattern
-    name can be supplied (e.g. loops, borders, hairpins, ...) or a kernel matrix
-    can be supplied directly instead.
-
-    Positions with significant changes will be reported in a pandas
-    dataframe. Optionally, a 2D bed file with positions of interest can be
-    specified, in which case change value at these positions will be reported
-    instead.
+    Run the detection process for a single matrix. This is abstracted from all
+    the abstractions related to chromosomes and genomic coordinates
     """
-    # Make sure each sample has an associated condition
-    if len(cool_files) != len(conditions):
-        raise ValueError(
-            "The lists of cool files and conditions must have the same length"
-        )
-
-    # If a pattern name was provided, load corresponding chromosight kernel
-    if isinstance(kernel, str):
-        kernel = getattr(ck, kernel)["kernels"][0]
-    # Associate samples with their conditions
-    samples = pd.DataFrame(
-        {"cond": conditions, "cool": pai.get_coolers(cool_files)}
-    )
-    # Remember condition values in a fixed order
-    conditions = np.unique(conditions)
-    # Define range of interest from region
-    clr = samples.cool.values[0]
-    if region is None:
-        s, e = 0, clr.shape[0]
-        bins = clr.bins()[:]
-    else:
-        s, e = clr.extent(region)
-        bins = clr.bins().fetch(region).reset_index(drop=True)
     # Compute number of contacts in the matrix with the lowest coverage
     if subsample:
         min_contacts = get_min_contacts(samples.cool, region=region)
@@ -215,6 +181,7 @@ def change_detection_pipeline(
     )
     # Use average difference to first background as change metric
     diff = sp.csr_matrix(backgrounds[0].shape)
+    conditions = np.unique(samples.cond)
     for c in conditions[1:]:
         diff += backgrounds[c] - backgrounds[conditions[0]]
     diff.data /= len(backgrounds) - 1
@@ -223,51 +190,124 @@ def change_detection_pipeline(
         abs(within_diffs[within_diffs != 0]), percentile_thresh
     )
     diff.data[np.abs(diff.data) < thresh] = 0.0
-    # If positions were provided, return the change value for each of them
+    return diff, thresh
+
+
+def change_detection_pipeline(
+    cool_files: Iterable[str],
+    conditions: Iterable[str],
+    kernel: Union[np.ndarray, str] = "loops",
+    bed2d_file: Optional[str] = None,
+    region: Optional[str] = None,
+    max_dist: Optional[int] = None,
+    subsample: bool = True,
+    percentile_thresh: float = 95.0,
+) -> pd.DataFrame:
+    """
+    Run end to end pattern change detection pipeline on input cool files. A
+    list of conditions of the same lengths as the sample list must be provided.
+
+    Changes for a specific pattern are computed. A valid chromosight pattern
+    name can be supplied (e.g. loops, borders, hairpins, ...) or a kernel matrix
+    can be supplied directly instead.
+
+    Positions with significant changes will be reported in a pandas
+    dataframe. Optionally, a 2D bed file with positions of interest can be
+    specified, in which case change value at these positions will be reported
+    instead.
+    """
+    # Make sure each sample has an associated condition
+    if len(cool_files) != len(conditions):
+        raise ValueError(
+            "The lists of cool files and conditions must have the same length"
+        )
+
+    # If a pattern name was provided, load corresponding chromosight kernel
+    if isinstance(kernel, str):
+        kernel = getattr(ck, kernel)["kernels"][0]
+    # Associate samples with their conditions
+    samples = pd.DataFrame(
+        {"cond": conditions, "cool": pai.get_coolers(cool_files)}
+    )
+    # Define each chromosome as a region, if None specified
+    clr = samples.cool.values[0]
+    if region is None:
+        regions = clr.chroms()[:]["name"].tolist()
+    else:
+        regions = [region]
+    pos_cols = [
+        "chrom1",
+        "start1",
+        "end1",
+        "chrom2",
+        "start2",
+        "end2",
+        "bin1",
+        "bin2",
+        "diff",
+    ]
     if bed2d_file:
         positions = cio.load_bed2d(bed2d_file)
-        # Convert both coordinates from genomic coords to bins
-        for i in [1, 2]:
-            positions["pos"] = (
-                positions[f"start{i}"] + positions[f"end{i}"]
-            ) // 2
-            positions.chrom = positions[f"chrom{i}"]
-            positions[f"bin{i}"] = coords_to_bins(clr, positions)
-        positions = positions.drop(columns=["pos", "chrom"])
-        # Subset positions to region of interest
-    # Otherwise report individual spots of change using chromosight
+        positions["diff"] = np.nan
     else:
-        # Pick "foci" of changed pixels and their local maxima
-        positions, _ = cud.picker(abs(diff), thresh)
-        # Get genomic positions from matrix coordinates
-        positions = pd.DataFrame(positions, columns=["bin1", "bin2"])
-        for i in [1, 2]:
-            coords = (
-                bins.loc[positions[f"bin{i}"], ["chrom", "start", "end"]]
-                .reset_index(drop=True)
-                .rename(
-                    columns={
-                        "chrom": f"chrom{i}",
-                        "start": f"start{i}",
-                        "end": f"end{i}",
-                    }
-                )
+        positions = pd.DataFrame(columns=pos_cols)
+    for reg in regions:
+        # Subset bins to the range of interest
+        bins = clr.bins().fetch(reg).reset_index(drop=True)
+        diff, thresh = detection_matrix(
+            samples,
+            kernel,
+            region=reg,
+            subsample=subsample,
+            max_dist=max_dist,
+            percentile_thresh=percentile_thresh,
+        )
+        # If positions were provided, return the change value for each of them
+        if bed2d_file:
+            tmp_chr = reg.split(":")[0]
+            tmp_rows = (positions.chrom1 == tmp_chr) & (
+                positions.chrom2 == tmp_chr
             )
-            positions = pd.concat([coords, positions], axis=1)
-    # Retrieve diff values for each coordinate
-    positions["diff"] = positions.apply(lambda p: diff[p.bin1, p.bin2], axis=1)
+            tmp_pos = positions.loc[tmp_rows, :]
+            # Convert both coordinates from genomic coords to bins
+            for i in [1, 2]:
+                tmp_pos.chrom = tmp_pos[f"chrom{i}"]
+                tmp_pos["pos"] = (
+                    tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
+                ) // 2
+                tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos)
+            tmp_pos = tmp_pos.drop(columns=["pos", "chrom"])
+            # Retrieve diff values for each coordinate
+            positions.loc[tmp_rows, "diff"] = tmp_pos.apply(
+                lambda p: diff[p.bin1, p.bin2], axis=1
+            )
+        # Otherwise report individual spots of change using chromosight
+        else:
+            # Pick "foci" of changed pixels and their local maxima
+            tmp_pos, _ = cud.picker(abs(diff), thresh)
+            # Get genomic positions from matrix coordinates
+            tmp_pos = pd.DataFrame(tmp_pos, columns=["bin1", "bin2"])
+            for i in [1, 2]:
+                coords = (
+                    bins.loc[tmp_pos[f"bin{i}"], ["chrom", "start", "end"]]
+                    .reset_index(drop=True)
+                    .rename(
+                        columns={
+                            "chrom": f"chrom{i}",
+                            "start": f"start{i}",
+                            "end": f"end{i}",
+                        }
+                    )
+                )
+                # Add axis' columns to  dataframe
+                tmp_pos = pd.concat([coords, tmp_pos], axis=1)
+            # Retrieve diff values for each coordinate
+            tmp_pos["diff"] = tmp_pos.apply(
+                lambda p: diff[p.bin1, p.bin2], axis=1
+            )
+            # Append new chromosome's rows
+            positions = pd.concat([positions, tmp_pos], axis=0)
     positions = positions.loc[
-        :,
-        [
-            "chrom1",
-            "start1",
-            "end1",
-            "chrom2",
-            "start2",
-            "end2",
-            "bin1",
-            "bin2",
-            "diff",
-        ],
+        :, pos_cols,
     ]
     return positions
