@@ -56,7 +56,7 @@ def test_coords_to_bins():
     obs_idx = pah.coords_to_bins(clr, coords)
     np.testing.assert_equal(obs_idx, exp_idx)
 
-def test_change_detection_pipeline():
+def test_change_detection():
     """Test if change detection pipeline finds some relevant positions"""
     # Run loop change detection between matrices with and without loops
     cools = COOLS + COOLS_COMP
@@ -74,3 +74,13 @@ def test_change_detection_pipeline():
             found += 1
     assert found / LOOPS.shape[0] >= 0.5
 
+
+def test_change_quantification():
+    """Test if change detection pipeline change at input positions"""
+    # Run loop change detection between matrices with and without loops
+    cools = COOLS + COOLS_COMP
+    conds = ["A"] * len(COOLS) + ["B"] * len(COOLS_COMP)
+    obs_pos = pah.change_detection_pipeline(cools, conds, bed2d_file=str(DATA / 'A_loops.bed2d'), subsample=False, percentile_thresh=95)
+    diff = obs_pos.diff_score
+    # Check if change was detected in at least half the positions
+    assert len(diff[diff<0]) >= len(diff) * 0.5

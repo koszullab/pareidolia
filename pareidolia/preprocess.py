@@ -7,7 +7,6 @@ cmdoret, 20200403
 from typing import Iterable, Tuple, Iterator, Set
 import numpy as np
 import scipy.sparse as sp
-import chromosight.utils.detection as cud
 import chromosight.utils.preprocessing as cup
 
 
