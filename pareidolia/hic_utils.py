@@ -186,10 +186,17 @@ def detection_matrix(
         diff += backgrounds[c] - backgrounds[conditions[0]]
     diff.data /= len(backgrounds) - 1
     # Apply threshold to differences based on within-condition variations
-    thresh = np.percentile(
-        abs(within_diffs[within_diffs != 0]), percentile_thresh
-    )
-    diff.data[np.abs(diff.data) < thresh] = 0.0
+    try:
+        thresh = np.percentile(
+            abs(within_diffs[within_diffs != 0]), percentile_thresh
+        )
+        diff.data[np.abs(diff.data) < thresh] = 0.0
+    # If there is no nonzero value (e.g. very small matrices), ignore threshold
+    # and set matrix to zero
+    except IndexError:
+        diff.data -= diff.data
+        thresh = np.nan
+
     return diff, thresh
 
 
@@ -268,19 +275,23 @@ def change_detection_pipeline(
             tmp_rows = (positions.chrom1 == tmp_chr) & (
                 positions.chrom2 == tmp_chr
             )
+            # If there are no positions of interest on this chromosome, just
+            # skip it
+            if not np.any(tmp_rows):
+                continue
             tmp_pos = positions.loc[tmp_rows, :]
             # Convert both coordinates from genomic coords to bins
             for i in [1, 2]:
-                tmp_pos.chrom = tmp_pos[f"chrom{i}"]
+                tmp_pos["chrom"] = tmp_pos[f"chrom{i}"]
                 tmp_pos["pos"] = (
                     tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
                 ) // 2
                 tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos)
             tmp_pos = tmp_pos.drop(columns=["pos", "chrom"])
             # Retrieve diff values for each coordinate
-            positions.loc[tmp_rows, "diff"] = tmp_pos.apply(
-                lambda p: diff[p.bin1, p.bin2], axis=1
-            )
+            positions.loc[tmp_rows, "diff"] = diff[
+                tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize,
+            ].A1
         # Otherwise report individual spots of change using chromosight
         else:
             # Pick "foci" of changed pixels and their local maxima
