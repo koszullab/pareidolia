@@ -251,11 +251,12 @@ def change_detection_pipeline(
         "end2",
         "bin1",
         "bin2",
-        "diff",
+        "diff_score",
     ]
     if bed2d_file:
         positions = cio.load_bed2d(bed2d_file)
-        positions["diff"] = np.nan
+        for col in ["diff_score", " bin1", "bin2"]:
+            positions[col] = np.nan
     else:
         positions = pd.DataFrame(columns=pos_cols)
     for reg in regions:
@@ -287,9 +288,11 @@ def change_detection_pipeline(
                     tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
                 ) // 2
                 tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos)
+                # Save bin coordinates from current chromosome to the full table
+                positions.loc[tmp_rows, f"bin{i}"] = tmp_pos[f"bin{i}"]
             tmp_pos = tmp_pos.drop(columns=["pos", "chrom"])
             # Retrieve diff values for each coordinate
-            positions.loc[tmp_rows, "diff"] = diff[
+            positions.loc[tmp_rows, "diff_score"] = diff[
                 tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize,
             ].A1
         # Otherwise report individual spots of change using chromosight
@@ -313,9 +316,7 @@ def change_detection_pipeline(
                 # Add axis' columns to  dataframe
                 tmp_pos = pd.concat([coords, tmp_pos], axis=1)
             # Retrieve diff values for each coordinate
-            tmp_pos["diff"] = tmp_pos.apply(
-                lambda p: diff[p.bin1, p.bin2], axis=1
-            )
+            tmp_pos["diff_score"] = diff[tmp_pos.bin1, tmp_pos.bin2].A1
             # Append new chromosome's rows
             positions = pd.concat([positions, tmp_pos], axis=0)
     positions = positions.loc[
