@@ -54,29 +54,40 @@ def get_nnz_set(
     intersection or union of nonzero coordinates from all matrices. Each
     coordinate is stored in the form of (row, col) tuples.
     """
-    # Check for input type
+    if mode == "union":
+        combine_fun = np.union1d
+    elif mode == "intersection":
+        combine_fun = np.intersect1d
+    else:
+        raise ValueError("mode must be either 'union' or 'intersection'")
     try:
+        # Check for input type
         if np.all([m.format == "csr" for m in mats]):
             for i, mat in enumerate(mats):
                 # Use first matrix to initialize set
                 if i == 0:
-                    nnz_set = set(yield_nnz(mat))
-                # Iteratively reduce set by keeping only elements present in each matrix
+                    all_nnz = np.ascontiguousarray(np.vstack(mat.nonzero()).T)
+                    _, ncols = all_nnz.shape
+                    # Define a dtype to trick numpy into treating rows as
+                    # single values. Based on:
+                    # https://stackoverflow.com/a/8317403/8440675
+                    dtype = {
+                        "names": [f"f{i}" for i in range(ncols)],
+                        "formats": ncols * [all_nnz.dtype],
+                    }
+                # Iteratively reduce or expand with each matrix
                 else:
-                    if mode == "union":
-                        nnz_set = nnz_set.union(set(yield_nnz(mat)))
-                    elif mode == "intersection":
-                        nnz_set = nnz_set.intersection(set(yield_nnz(mat)))
-                    else:
-                        raise ValueError(
-                            "mode must be either 'union' or 'intersection'"
-                        )
+                    mat_nnz = np.ascontiguousarray(np.vstack(mat.nonzero()).T)
+                    all_nnz = combine_fun(
+                        all_nnz.view(dtype), mat_nnz.view(dtype)
+                    )
+                    all_nnz = all_nnz.view(mat_nnz.dtype).reshape(-1, ncols)
         else:
             raise ValueError("input sparse matrices must be in csr format")
     except AttributeError:
         raise TypeError("Input type must be scipy.sparse.csr_matrix")
 
-    return nnz_set
+    return all_nnz
 
 
 def filter_nnz(mat: sp.csr_matrix, nnz_set: Set[Tuple[int]]) -> sp.csr_matrix:
@@ -94,19 +105,22 @@ def filter_nnz(mat: sp.csr_matrix, nnz_set: Set[Tuple[int]]) -> sp.csr_matrix:
 
 
 def fill_nnz(
-    mat: sp.csr_matrix, nnz_set: Set[Tuple[int]], fill_value: float = 0.0
+    mat: sp.csr_matrix, all_nnz: Set[Tuple[int]], fill_value: float = 0.0
 ) -> sp.csr_matrix:
     """
     Given an input sparse matrix and a set of nonzero coordinates, fill the
     matrix to ensure all values in the set are stored explicitely.
     """
     # Get the set of nonzero coordinate in the input matrix
-    nnz_mat = set(yield_nnz(mat))
-    nnz_list = list(nnz_set)
+    mat_nnz = np.ascontiguousarray(np.vstack(mat.nonzero()).T)
     out = mat.copy()
+    ncols = all_nnz.shape[1]
+    dtype = {
+        "names": [f"f{i}" for i in range(ncols)],
+        "formats": ncols * [all_nnz.dtype],
+    }
     # get all all nnz_set coordinates that are zero in the matrix
-    add_rows = [c[0] for c in nnz_list if c not in nnz_mat]
-    add_cols = [c[1] for c in nnz_list if c not in nnz_mat]
+    add_mask = np.in1d(all_nnz.view(dtype), mat_nnz.view(dtype), invert=True)
     # Replace implicit zeros by fill_value at these coordinates
-    out[add_rows, add_cols] = fill_value
+    out[all_nnz[add_mask, 0], all_nnz[add_mask, 1]] = fill_value
     return out
