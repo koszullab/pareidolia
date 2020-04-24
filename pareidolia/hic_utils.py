@@ -7,6 +7,7 @@ cmdoret, 20200404
 """
 
 import sys
+import itertools as it
 from typing import Iterable, Optional, Union
 import numpy as np
 import pandas as pd
@@ -19,6 +20,7 @@ import chromosight.kernels as ck
 import pareidolia.io as pai
 import pareidolia.preprocess as pap
 import pareidolia.detection as pad
+import multiprocessing as mp
 
 
 def get_min_contacts(
@@ -126,49 +128,79 @@ def detection_matrix(
     subsample: Optional[int] = None,
     max_dist: Optional[int] = None,
     percentile_thresh: float = 95.0,
+    n_cpus: int = 4,
 ):
     """
     Run the detection process for a single matrix. This is abstracted from all
-    the abstractions related to chromosomes and genomic coordinates
+    the abstractions related to chromosomes and genomic coordinates.
     """
+    # We consider the matrix is symmetric upper (i.e. intrachromosomal)
+    sym_upper = True
     # Compute number of contacts in the matrix with the lowest coverage
     if subsample:
         min_contacts = get_min_contacts(samples.cool, region=region)
     else:
         min_contacts = None
+    # Define the condition of the first sample as the baseline condition
+    control = samples.cond.values[0]
     # Preprocess all matrices (subsample, balance, detrend)
-    samples["mat"] = samples.cool.apply(
-        lambda clr: preprocess_hic(
-            clr, min_contacts=min_contacts, region=region
-        )
+    # Samples pocessed in parallel
+
+    pool = mp.Pool(n_cpus)
+    samples["mat"] = pool.starmap(
+        preprocess_hic,
+        zip(samples.cool, it.repeat(min_contacts), it.repeat(region)),
     )
     # Retrieve the indices of bins which are valid in all samples (not missing
     # because of repeated sequences or low coverage)
-    common_bins = pap.get_common_valid_bins(samples.mat)
+    common_bins = pap.get_common_valid_bins(samples["mat"])
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
-        samples.mat[0].shape,
+        samples["mat"][0].shape,
         common_bins,
         common_bins,
         max_dist=max_dist,
-        sym_upper=True,
+        sym_upper=sym_upper,
     )
     # Remove all missing values form each sample's matrix
-    samples.mat = samples.mat.apply(
-        lambda mat: cup.erase_missing(sp.triu(mat), common_bins, common_bins)
+    samples["mat"] = pool.starmap(
+        cup.erase_missing,
+        zip(
+            map(sp.triu, samples["mat"]),
+            it.repeat(common_bins),
+            it.repeat(common_bins),
+            it.repeat(sym_upper),
+        ),
     )
     # Generate correlation maps for all samples using chromosight's algorithm
-    samples["corr"] = samples.mat.apply(
-        lambda mat: cud.normxcorr2(
-            mat, kernel, full=True, missing_mask=missing_mask, sym_upper=True,
-        )[0]
+    corrs = pool.starmap(
+        cud.normxcorr2,
+        zip(
+            samples.mat.values,
+            it.repeat(kernel),
+            it.repeat(max_dist),
+            it.repeat(True),
+            it.repeat(True),
+            it.repeat(missing_mask),
+            it.repeat(0.75),
+            it.repeat(None),
+            it.repeat(False),
+        ),
     )
+    samples["corr"] = [tup[0] for tup in corrs]
+    del corrs
+    # samples["corr"] = samples.mat.apply(
+    #     lambda mat: cud.normxcorr2(
+    #         mat, kernel, full=True, missing_mask=missing_mask, sym_upper=True,
+    #     )[0]
+    # )
     # Get the union of nonzero coordinates across all samples
-    total_nnz_set = pap.get_nnz_set(samples["corr"], mode="union")
+    total_nnz_set = pap.get_nnz_set(samples["corr"])
     # Store explicit zeros at these coordinates
     samples["corr"] = samples["corr"].apply(
         lambda cor: pap.fill_nnz(cor, total_nnz_set)
     )
+    pool.close()
     # Compute background for each condition
     backgrounds = samples.groupby("cond")["corr"].apply(
         lambda g: pad.median_bg(g.reset_index(drop=True))
@@ -182,8 +214,9 @@ def detection_matrix(
     # Use average difference to first background as change metric
     diff = sp.csr_matrix(backgrounds[0].shape)
     conditions = np.unique(samples.cond)
-    for c in conditions[1:]:
-        diff += backgrounds[c] - backgrounds[conditions[0]]
+    conditions = conditions[conditions != control]
+    for c in conditions:
+        diff += backgrounds[c] - backgrounds[control]
     diff.data /= len(backgrounds) - 1
     # Apply threshold to differences based on within-condition variations
     try:
@@ -205,14 +238,16 @@ def change_detection_pipeline(
     conditions: Iterable[str],
     kernel: Union[np.ndarray, str] = "loops",
     bed2d_file: Optional[str] = None,
-    region: Optional[str] = None,
+    region: Optional[Union[Iterable[str], str]] = None,
     max_dist: Optional[int] = None,
     subsample: bool = True,
     percentile_thresh: float = 95.0,
+    n_cpus: int = 4,
 ) -> pd.DataFrame:
     """
     Run end to end pattern change detection pipeline on input cool files. A
     list of conditions of the same lengths as the sample list must be provided.
+    The first condition in the list is used as the reference (control) state.
 
     Changes for a specific pattern are computed. A valid chromosight pattern
     name can be supplied (e.g. loops, borders, hairpins, ...) or a kernel matrix
@@ -222,6 +257,9 @@ def change_detection_pipeline(
     dataframe. Optionally, a 2D bed file with positions of interest can be
     specified, in which case change value at these positions will be reported
     instead.
+
+    Positive diff_scores mean the pattern intensity was increased relative to
+    control (first condition).
     """
     # Make sure each sample has an associated condition
     if len(cool_files) != len(conditions):
@@ -231,17 +269,30 @@ def change_detection_pipeline(
 
     # If a pattern name was provided, load corresponding chromosight kernel
     if isinstance(kernel, str):
-        kernel = getattr(ck, kernel)["kernels"][0]
+        kernel_name = kernel
+        try:
+            kernel = getattr(ck, kernel)["kernels"][0]
+        except AttributeError:
+            raise AttributeError(f"{kernel_name} is not a valid pattern name")
+    elif isinstance(kernel, np.ndarray):
+        kernel_name = "custom kernel"
+    else:
+        raise ValueError(
+            "Kernel must either be a valid chromosight pattern name, or a 2D numpy.ndarray of floats"
+        )
     # Associate samples with their conditions
     samples = pd.DataFrame(
         {"cond": conditions, "cool": pai.get_coolers(cool_files)}
+    )
+    print(
+        f"Changes will be computed relative to condition: {samples.cond.values[0]}"
     )
     # Define each chromosome as a region, if None specified
     clr = samples.cool.values[0]
     if region is None:
         regions = clr.chroms()[:]["name"].tolist()
-    else:
-        regions = [region]
+    elif isinstance(region, str):
+        region = [region]
     pos_cols = [
         "chrom1",
         "start1",
@@ -269,6 +320,7 @@ def change_detection_pipeline(
             subsample=subsample,
             max_dist=max_dist,
             percentile_thresh=percentile_thresh,
+            n_cpus=n_cpus,
         )
         # If positions were provided, return the change value for each of them
         if bed2d_file:
@@ -287,7 +339,7 @@ def change_detection_pipeline(
                 tmp_pos["pos"] = (
                     tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
                 ) // 2
-                tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos)
+                tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos).astype(int)
                 # Save bin coordinates from current chromosome to the full table
                 positions.loc[tmp_rows, f"bin{i}"] = tmp_pos[f"bin{i}"]
             tmp_pos = tmp_pos.drop(columns=["pos", "chrom"])
