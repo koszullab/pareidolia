@@ -5,15 +5,15 @@ Functions used to load and save files.
 cmdoret, 20200406
 """
 
-from typing import Iterable
+from typing import Iterable, List
 import cooler
 
-def get_coolers(path_list: Iterable[str]):
+def get_coolers(path_list: Iterable[str]) -> List['cooler.Cooler']:
     """
     Load multiple cool files, ensuring they have the same resolution and
     shape.
     """
-    cools = [None] * len(path_list)
+    coolers = [None] * len(path_list)
     # Do not attempt loading if input is a single path
     if isinstance(path_list, str):
         raise TypeError("Input must be an iterable of strings.")
@@ -30,6 +30,6 @@ def get_coolers(path_list: Iterable[str]):
                 raise ValueError("Resolutions are inconsistent.")
             if clr.shape != shape:
                 raise ValueError("Shapes are inconsistent.")
-        cools[i] = clr
+        coolers[i] = clr
 
-    return cools
+    return coolers

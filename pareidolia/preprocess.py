@@ -46,42 +46,24 @@ def yield_nnz(mat: sp.spmatrix) -> Iterator[Tuple[int]]:
     return zip(nnr, nnc)
 
 
-def get_nnz_set(
-    mats: Iterable[sp.csr_matrix], mode: str = "intersection"
-) -> Set[Tuple[int]]:
+def get_nnz_set(mats: Iterable[sp.csr_matrix]) -> Set[Tuple[int]]:
     """
     Given an arbitrary number of sparse matrices, build a set containing the
     intersection or union of nonzero coordinates from all matrices. Each
     coordinate is stored in the form of (row, col) tuples.
     """
-    if mode == "union":
-        combine_fun = np.union1d
-    elif mode == "intersection":
-        combine_fun = np.intersect1d
-    else:
-        raise ValueError("mode must be either 'union' or 'intersection'")
     try:
         # Check for input type
         if np.all([m.format == "csr" for m in mats]):
             for i, mat in enumerate(mats):
                 # Use first matrix to initialize set
                 if i == 0:
-                    all_nnz = np.ascontiguousarray(np.vstack(mat.nonzero()).T)
-                    _, ncols = all_nnz.shape
-                    # Define a dtype to trick numpy into treating rows as
-                    # single values. Based on:
-                    # https://stackoverflow.com/a/8317403/8440675
-                    dtype = {
-                        "names": [f"f{i}" for i in range(ncols)],
-                        "formats": ncols * [all_nnz.dtype],
-                    }
-                # Iteratively reduce or expand with each matrix
+                    union_mat = mat.copy()
+                # Iteratively sum matrices
                 else:
-                    mat_nnz = np.ascontiguousarray(np.vstack(mat.nonzero()).T)
-                    all_nnz = combine_fun(
-                        all_nnz.view(dtype), mat_nnz.view(dtype)
-                    )
-                    all_nnz = all_nnz.view(mat_nnz.dtype).reshape(-1, ncols)
+                    union_mat += mat
+            # Retrieve positions of nonzero entries into an array
+            all_nnz = np.ascontiguousarray(np.vstack(union_mat.nonzero()).T)
         else:
             raise ValueError("input sparse matrices must be in csr format")
     except AttributeError:
@@ -90,31 +72,20 @@ def get_nnz_set(
     return all_nnz
 
 
-def filter_nnz(mat: sp.csr_matrix, nnz_set: Set[Tuple[int]]) -> sp.csr_matrix:
-    """
-    Given an input sparse matrix and a set of nonzero coordinates, filter the
-    matrix to keep only positions present in the set.
-    """
-    out = mat.copy()
-    drop_coords_mask = np.array(
-        [n not in nnz_set for n in yield_nnz(mat)], dtype=bool
-    )
-    out.data[drop_coords_mask] = 0.0
-    out.eliminate_zeros()
-    return out
-
-
 def fill_nnz(
-    mat: sp.csr_matrix, all_nnz: Set[Tuple[int]], fill_value: float = 0.0
+    mat: "sp.csr_matrix", all_nnz: "np.ndarray[int]", fill_value: float = 0.0
 ) -> sp.csr_matrix:
     """
     Given an input sparse matrix and a set of nonzero coordinates, fill the
-    matrix to ensure all values in the set are stored explicitely.
+    matrix to ensure all values in the set are stored explicitely with the
+    value of fill_value.
     """
     # Get the set of nonzero coordinate in the input matrix
     mat_nnz = np.ascontiguousarray(np.vstack(mat.nonzero()).T)
     out = mat.copy()
     ncols = all_nnz.shape[1]
+    # Tricking numpy into treating rows as single values using a custom dtype
+    # based on: https://stackoverflow.com/a/8317403/8440675
     dtype = {
         "names": [f"f{i}" for i in range(ncols)],
         "formats": ncols * [all_nnz.dtype],
