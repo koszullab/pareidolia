@@ -262,7 +262,8 @@ def change_detection_pipeline(
 
     Changes for a specific pattern are computed. A valid chromosight pattern
     name can be supplied (e.g. loops, borders, hairpins, ...) or a kernel matrix
-    can be supplied directly instead.
+    can be supplied directly instead. maximum scanning distance can be specified
+    directly (in basepairs) to override the kernel default value.
 
     Positions with significant changes will be reported in a pandas
     dataframe. Optionally, a 2D bed file with positions of interest can be
@@ -282,7 +283,9 @@ def change_detection_pipeline(
     if isinstance(kernel, str):
         kernel_name = kernel
         try:
-            kernel = getattr(ck, kernel)["kernels"][0]
+            kernel = getattr(ck, kernel_name)["kernels"][0]
+            if max_dist is None:
+                max_dist = getattr(ck, kernel_name)["max_dist"]
         except AttributeError:
             raise AttributeError(f"{kernel_name} is not a valid pattern name")
     elif isinstance(kernel, np.ndarray):
@@ -300,6 +303,8 @@ def change_detection_pipeline(
     )
     # Define each chromosome as a region, if None specified
     clr = samples.cool.values[0]
+    if max_dist is not None:
+        max_dist = max_dist // clr.binsize
     if region is None:
         regions = clr.chroms()[:]["name"].tolist()
     elif isinstance(region, str):
