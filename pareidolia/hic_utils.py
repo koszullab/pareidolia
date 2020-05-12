@@ -8,7 +8,7 @@ cmdoret, 20200404
 
 import sys
 import itertools as it
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional, Union, Tuple
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
@@ -69,8 +69,8 @@ def preprocess_hic(
     except KeyError as err:
         sys.stderr.write("Error: Input cooler must be balanced.\n")
         raise err
-    # get to same coverage
-    if min_contacts is not None:
+    # get to same coverage if requested and matrix is not empty
+    if mat.sum() and (min_contacts is not None):
         mat = cup.subsample_contacts(mat, min_contacts).tocoo()
     valid = cup.get_detectable_bins(mat, n_mads=5)
 
@@ -129,7 +129,7 @@ def detection_matrix(
     max_dist: Optional[int] = None,
     percentile_thresh: float = 95.0,
     n_cpus: int = 4,
-):
+) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
     """
     Run the detection process for a single matrix. This is abstracted from all
     the abstractions related to chromosomes and genomic coordinates.
@@ -144,13 +144,22 @@ def detection_matrix(
     # Define the condition of the first sample as the baseline condition
     control = samples.cond.values[0]
     # Preprocess all matrices (subsample, balance, detrend)
-    # Samples pocessed in parallel
+    # Samples pocessed in parallel if requested
+    if n_cpus > 1:
+        pool = mp.Pool(n_cpus)
+        map_fun = pool.starmap
+    else:
+        map_fun = lambda x, y: [x(*args) for args in y]
 
-    pool = mp.Pool(n_cpus)
-    samples["mat"] = pool.starmap(
+    samples["mat"] = map_fun(
         preprocess_hic,
         zip(samples.cool, it.repeat(min_contacts), it.repeat(region)),
     )
+    print(f"{region} preprocessed", file=sys.stderr)
+
+    # Return nothing if the matrix is smaller than kernel
+    if (samples['mat'][0].shape[0] < kernel.shape[0]) or (samples['mat'][0].shape[1] < kernel.shape[1]):
+            return None, None
     # Retrieve the indices of bins which are valid in all samples (not missing
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
@@ -163,7 +172,7 @@ def detection_matrix(
         sym_upper=sym_upper,
     )
     # Remove all missing values form each sample's matrix
-    samples["mat"] = pool.starmap(
+    samples["mat"] = map_fun(
         cup.erase_missing,
         zip(
             map(sp.triu, samples["mat"]),
@@ -172,8 +181,9 @@ def detection_matrix(
             it.repeat(sym_upper),
         ),
     )
+    print(f"{region} missing bins erased", file=sys.stderr)
     # Generate correlation maps for all samples using chromosight's algorithm
-    corrs = pool.starmap(
+    corrs = map_fun(
         cud.normxcorr2,
         zip(
             samples.mat.values,
@@ -187,27 +197,29 @@ def detection_matrix(
             it.repeat(False),
         ),
     )
-    samples["corr"] = [tup[0] for tup in corrs]
+    samples["mat"] = [tup[0] for tup in corrs]
     del corrs
+    print(f"{region} correlation matrices computed", file=sys.stderr)
     # samples["corr"] = samples.mat.apply(
     #     lambda mat: cud.normxcorr2(
     #         mat, kernel, full=True, missing_mask=missing_mask, sym_upper=True,
     #     )[0]
     # )
     # Get the union of nonzero coordinates across all samples
-    total_nnz_set = pap.get_nnz_set(samples["corr"])
+    total_nnz_set = pap.get_nnz_set(samples["mat"])
     # Store explicit zeros at these coordinates
-    samples["corr"] = samples["corr"].apply(
+    samples["mat"] = samples["mat"].apply(
         lambda cor: pap.fill_nnz(cor, total_nnz_set)
     )
-    pool.close()
+    if n_cpus > 1:
+        pool.close()
     # Compute background for each condition
-    backgrounds = samples.groupby("cond")["corr"].apply(
+    backgrounds = samples.groupby("cond")["mat"].apply(
         lambda g: pad.median_bg(g.reset_index(drop=True))
     )
     # Get the distribution of difference to background within each condition
     within_diffs = np.hstack(
-        samples.groupby("cond")["corr"].apply(
+        samples.groupby("cond")["mat"].apply(
             lambda g: pad.reps_bg_diff(g.reset_index(drop=True))
         )
     )
@@ -224,11 +236,10 @@ def detection_matrix(
             abs(within_diffs[within_diffs != 0]), percentile_thresh
         )
         diff.data[np.abs(diff.data) < thresh] = 0.0
-    # If there is no nonzero value (e.g. very small matrices), ignore threshold
-    # and set matrix to zero
+    # If there is no nonzero value (e.g. very small matrices), return nothing
     except IndexError:
-        diff.data -= diff.data
-        thresh = np.nan
+        diff = None
+        thresh = None
 
     return diff, thresh
 
@@ -322,6 +333,9 @@ def change_detection_pipeline(
             percentile_thresh=percentile_thresh,
             n_cpus=n_cpus,
         )
+        # If the matrix was too small, skip it
+        if thresh is None:
+            continue
         # If positions were provided, return the change value for each of them
         if bed2d_file:
             tmp_chr = reg.split(":")[0]
