@@ -158,14 +158,14 @@ def detection_matrix(
     print(f"{region} preprocessed", file=sys.stderr)
 
     # Return nothing if the matrix is smaller than kernel
-    if np.any(np.array(samples['mat'][0].shape) <= np.array(kernel.shape)):
+    if np.any(np.array(samples["mat"][0].shape) <= np.array(kernel.shape)):
         return None, None
     # Retrieve the indices of bins which are valid in all samples (not missing
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
     # Trim diagonals beyond max_dist to spare resources
-    samples['mat'] = map_fun(
-        cup.diag_trim, zip(samples['mat'], it.repeat(max_dist))
+    samples["mat"] = map_fun(
+        cup.diag_trim, zip(samples["mat"], it.repeat(max_dist))
     )
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
@@ -211,7 +211,7 @@ def detection_matrix(
     # )
     # Get the union of nonzero coordinates across all samples
     total_nnz_set = pap.get_nnz_set(samples["mat"])
-    # Store explicit zeros at these coordinates
+    # Fill zeros at these coordinates
     samples["mat"] = samples["mat"].apply(
         lambda cor: pap.fill_nnz(cor, total_nnz_set)
     )

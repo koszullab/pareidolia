@@ -48,7 +48,7 @@ def yield_nnz(mat: sp.spmatrix) -> Iterator[Tuple[int]]:
 
 def get_nnz_set(mats: Iterable[sp.csr_matrix]) -> Set[Tuple[int]]:
     """
-    Given an arbitrary number of sparse matrices, build a set containing the
+    Given a list of sparse matrices, build a set containing the
     intersection or union of nonzero coordinates from all matrices. Each
     coordinate is stored in the form of (row, col) tuples.
     """
@@ -73,7 +73,7 @@ def get_nnz_set(mats: Iterable[sp.csr_matrix]) -> Set[Tuple[int]]:
 
 
 def fill_nnz(
-    mat: "sp.csr_matrix", all_nnz: "np.ndarray[int]", fill_value: float = 0.0
+    mat: "sp.csr_matrix", all_nnz: "np.ndarray[int]", fill_value: float = 1e-9
 ) -> sp.csr_matrix:
     """
     Given an input sparse matrix and a set of nonzero coordinates, fill the
