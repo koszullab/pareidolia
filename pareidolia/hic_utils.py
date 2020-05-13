@@ -158,11 +158,15 @@ def detection_matrix(
     print(f"{region} preprocessed", file=sys.stderr)
 
     # Return nothing if the matrix is smaller than kernel
-    if (samples['mat'][0].shape[0] < kernel.shape[0]) or (samples['mat'][0].shape[1] < kernel.shape[1]):
-            return None, None
+    if np.any(np.array(samples['mat'][0].shape) <= np.array(kernel.shape)):
+        return None, None
     # Retrieve the indices of bins which are valid in all samples (not missing
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
+    # Trim diagonals beyond max_dist to spare resources
+    samples['mat'] = map_fun(
+        cup.diag_trim, zip(samples['mat'], it.repeat(max_dist))
+    )
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
