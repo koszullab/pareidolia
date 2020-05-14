@@ -46,11 +46,11 @@ def yield_nnz(mat: sp.spmatrix) -> Iterator[Tuple[int]]:
     return zip(nnr, nnc)
 
 
-def get_nnz_set(mats: Iterable[sp.csr_matrix]) -> Set[Tuple[int]]:
+def get_nnz_union(mats: Iterable["sp.csr_matrix[float]"]) -> "np.ndarray[int]":
     """
-    Given a list of sparse matrices, build a set containing the
-    intersection or union of nonzero coordinates from all matrices. Each
-    coordinate is stored in the form of (row, col) tuples.
+    Given a list of sparse matrices, return the union of their nonzero
+    coordinates, in the form of a 2D numpy array with 1 coordinate per
+    row, with 2 columns representing coordinates rows and columns.
     """
     try:
         # Check for input type
@@ -62,6 +62,7 @@ def get_nnz_set(mats: Iterable[sp.csr_matrix]) -> Set[Tuple[int]]:
                 # Iteratively sum matrices
                 else:
                     union_mat += mat
+                union_mat.eliminate_zeros()
             # Retrieve positions of nonzero entries into an array
             all_nnz = np.ascontiguousarray(np.vstack(union_mat.nonzero()).T)
         else:
@@ -76,7 +77,7 @@ def fill_nnz(
     mat: "sp.csr_matrix", all_nnz: "np.ndarray[int]", fill_value: float = 1e-9
 ) -> sp.csr_matrix:
     """
-    Given an input sparse matrix and a set of nonzero coordinates, fill the
+    Given an input sparse matrix and a superset of nonzero coordinates, fill the
     matrix to ensure all values in the set are stored explicitely with the
     value of fill_value.
     """
@@ -90,7 +91,7 @@ def fill_nnz(
         "names": [f"f{i}" for i in range(ncols)],
         "formats": ncols * [all_nnz.dtype],
     }
-    # get all all nnz_set coordinates that are zero in the matrix
+    # get all all_nnz coordinates that are zero in the matrix
     add_mask = np.in1d(all_nnz.view(dtype), mat_nnz.view(dtype), invert=True)
     # Replace implicit zeros by fill_value at these coordinates
     out[all_nnz[add_mask, 0], all_nnz[add_mask, 1]] = fill_value

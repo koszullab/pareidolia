@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 Functions used to load and save files.
@@ -8,7 +7,8 @@ cmdoret, 20200406
 from typing import Iterable, List
 import cooler
 
-def get_coolers(path_list: Iterable[str]) -> List['cooler.Cooler']:
+
+def get_coolers(path_list: Iterable[str]) -> List["cooler.Cooler"]:
     """
     Load multiple cool files, ensuring they have the same resolution and
     shape.

@@ -204,13 +204,8 @@ def detection_matrix(
     samples["mat"] = [tup[0] for tup in corrs]
     del corrs
     print(f"{region} correlation matrices computed", file=sys.stderr)
-    # samples["corr"] = samples.mat.apply(
-    #     lambda mat: cud.normxcorr2(
-    #         mat, kernel, full=True, missing_mask=missing_mask, sym_upper=True,
-    #     )[0]
-    # )
     # Get the union of nonzero coordinates across all samples
-    total_nnz_set = pap.get_nnz_set(samples["mat"])
+    total_nnz_set = pap.get_nnz_union(samples["mat"])
     # Fill zeros at these coordinates
     samples["mat"] = samples["mat"].apply(
         lambda cor: pap.fill_nnz(cor, total_nnz_set)
