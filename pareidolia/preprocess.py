@@ -11,17 +11,18 @@ import chromosight.utils.preprocessing as cup
 
 
 def get_common_valid_bins(
-    mats: Iterable[sp.csr_matrix], n_mads: float = 5,
-) -> np.ndarray:
+    mats: Iterable['sp.csr_matrix[float]'], n_mads: float = 5,
+) -> 'np.ndarray[int]':
     """
     Generates an array of valid bins indices, using the intersection
     of valid bins from all input sparse matrices. All input matrices must
-    be square and have the same shape.
+    be square and have the same shape. Valid bins are defined based on their
+    proportion of nonzero pixels.
     """
     common_valid = None
     for mat in mats:
         if mat.shape[0] != mat.shape[1]:
-            NotImplementedError("Only square matrices are valid input.")
+            raise NotImplementedError("Only square matrices are valid input.")
         # Get the list of valid bins in the current matrix
         valid = cup.get_detectable_bins(mat, n_mads=n_mads)
         # Initialize set of common bins with the first matrix
@@ -31,19 +32,6 @@ def get_common_valid_bins(
         else:
             common_valid = common_valid.intersection(set(valid[0]))
     return np.array(list(common_valid))
-
-
-def yield_nnz(mat: sp.spmatrix) -> Iterator[Tuple[int]]:
-    """
-    Helper function to extract nonzero values from a scipy.sparse matrix and
-    returns an iterator of nonzero coordinates, in the form of (row, col)
-    tuples.
-    """
-    # Split nonzero coordinates into rows and columns
-    nnr, nnc = mat.nonzero()
-    nnr = nnr.tolist()
-    nnc = nnc.tolist()
-    return zip(nnr, nnc)
 
 
 def get_nnz_union(mats: Iterable["sp.csr_matrix[float]"]) -> "np.ndarray[int]":
