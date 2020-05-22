@@ -321,7 +321,7 @@ def change_detection_pipeline(
     ]
     if bed2d_file:
         positions = cio.load_bed2d(bed2d_file)
-        for col in ["diff_score", " bin1", "bin2"]:
+        for col in ["diff_score", "bin1", "bin2"]:
             positions[col] = np.nan
     else:
         positions = pd.DataFrame(columns=pos_cols)
