@@ -92,5 +92,5 @@ def test_change_no_threshold():
     bed2d = pd.read_csv(str(DATA / 'A_loops.bed2d'), sep='\t')
     obs_pos = pah.change_detection_pipeline(cools, conds, bed2d_file=str(DATA / 'A_loops.bed2d'), subsample=False, percentile_thresh=None)
     diff = obs_pos.diff_score
-    # Check if change was detected in at least half the positions
-    assert obs_pos.shape[0] == bed2d.shape[0]
+    # Check if diff scores are returned for all positions
+    assert len(diff[~np.isnan(diff)]) == bed2d.shape[0]
