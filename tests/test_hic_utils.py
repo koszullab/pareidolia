@@ -83,3 +83,14 @@ def test_change_quantification():
     diff = obs_pos.diff_score
     # Check if change was detected in at least half the positions
     assert len(diff[diff<0]) >= len(diff) * 0.5
+
+def test_change_no_threshold():
+    """Test if change detection pipeline without threshold reports all input positions"""
+    # Run loop change detection between matrices with and without loops
+    cools = COOLS + COOLS_COMP
+    conds = ["A"] * len(COOLS) + ["B"] * len(COOLS_COMP)
+    bed2d = pd.read_csv(str(DATA / 'A_loops.bed2d'), sep='\t')
+    obs_pos = pah.change_detection_pipeline(cools, conds, bed2d_file=str(DATA / 'A_loops.bed2d'), subsample=False, percentile_thresh=None)
+    diff = obs_pos.diff_score
+    # Check if change was detected in at least half the positions
+    assert obs_pos.shape[0] == bed2d.shape[0]

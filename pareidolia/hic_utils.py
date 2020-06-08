@@ -341,7 +341,7 @@ def change_detection_pipeline(
             n_cpus=n_cpus,
         )
         # If the matrix was too small, skip it
-        if thresh is None:
+        if thresh is None and percentile_thresh is not None:
             continue
         # If positions were provided, return the change value for each of them
         if bed2d_file:
