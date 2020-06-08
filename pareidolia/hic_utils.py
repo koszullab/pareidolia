@@ -127,12 +127,12 @@ def detection_matrix(
     region: Optional[str] = None,
     subsample: Optional[int] = None,
     max_dist: Optional[int] = None,
-    percentile_thresh: float = 95.0,
+    percentile_thresh: Optional[float] = 95.0,
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
     """
     Run the detection process for a single matrix. This is abstracted from all
-    the abstractions related to chromosomes and genomic coordinates.
+    notions of chromosomes and genomic coordinates.
     """
     # We consider the matrix is symmetric upper (i.e. intrachromosomal)
     sym_upper = True
@@ -231,10 +231,13 @@ def detection_matrix(
     diff.data /= len(backgrounds) - 1
     # Apply threshold to differences based on within-condition variations
     try:
-        thresh = np.percentile(
-            abs(within_diffs[within_diffs != 0]), percentile_thresh
-        )
-        diff.data[np.abs(diff.data) < thresh] = 0.0
+        if percentile_thresh is None:
+            thresh = None
+        else:
+            thresh = np.percentile(
+                abs(within_diffs[within_diffs != 0]), percentile_thresh
+            )
+            diff.data[np.abs(diff.data) < thresh] = 0.0
     # If there is no nonzero value (e.g. very small matrices), return nothing
     except IndexError:
         diff = None
@@ -251,7 +254,7 @@ def change_detection_pipeline(
     region: Optional[Union[Iterable[str], str]] = None,
     max_dist: Optional[int] = None,
     subsample: bool = True,
-    percentile_thresh: float = 95.0,
+    percentile_thresh: Optional[float] = 95.0,
     n_cpus: int = 4,
 ) -> pd.DataFrame:
     """
@@ -363,7 +366,7 @@ def change_detection_pipeline(
             tmp_pos = tmp_pos.drop(columns=["pos", "chrom"])
             # Retrieve diff values for each coordinate
             positions.loc[tmp_rows, "diff_score"] = diff[
-                tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize,
+                tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize
             ].A1
         # Otherwise report individual spots of change using chromosight
         else:
@@ -389,7 +392,5 @@ def change_detection_pipeline(
             tmp_pos["diff_score"] = diff[tmp_pos.bin1, tmp_pos.bin2].A1
             # Append new chromosome's rows
             positions = pd.concat([positions, tmp_pos], axis=0)
-    positions = positions.loc[
-        :, pos_cols,
-    ]
+    positions = positions.loc[:, pos_cols]
     return positions
