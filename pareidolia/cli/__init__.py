@@ -102,7 +102,7 @@ def pareidolia_cmd(
         try:
             kernel = np.loadtxt(kernel)
         except OSError:
-            ValueError(
+            raise ValueError(
                 "kernel must either be a valid kernel name or path to a"
                 " text file (see --help)."
             )
