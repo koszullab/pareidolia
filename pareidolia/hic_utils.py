@@ -263,14 +263,17 @@ def change_detection_pipeline(
     The first condition in the list is used as the reference (control) state.
 
     Changes for a specific pattern are computed. A valid chromosight pattern
-    name can be supplied (e.g. loops, borders, hairpins, ...) or a kernel matrix
-    can be supplied directly instead. maximum scanning distance can be specified
-    directly (in basepairs) to override the kernel default value.
+    name can be supplied (e.g. loops, borders, hairpins, ...) or a kernel
+    matrix can be supplied directly instead. maximum scanning distance can be
+    specified directly (in basepairs) to override the kernel default value.
 
     Positions with significant changes will be reported in a pandas
-    dataframe. Optionally, a 2D bed file with positions of interest can be
-    specified, in which case change value at these positions will be reported
-    instead.
+    dataframe. Significance is determined based on the percentile threshold,
+    between 1 and 100. Optionally, a 2D bed file with positions of interest can
+    be specified, in which case change value at these positions will be
+    reported instead. When using a bed2d file, the threshold is optional (one
+    can report either scores at all positions, or only where they are
+    significant).
 
     Positive diff_scores mean the pattern intensity was increased relative to
     control (first condition).

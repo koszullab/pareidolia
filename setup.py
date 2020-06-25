@@ -18,17 +18,13 @@ setup(
     version="0.0.2",
     url="https://github.com/cmdoret/pareidolia",
     license='MIT',
-
     author="Cyril Matthey-Doret",
     author_email="cyril.matthey-doret@pasteur.fr",
-
     description="Multi-sample change detection in Hi-C patterns",
     long_description=read("README.rst"),
-
     packages=find_packages(exclude=('tests',)),
-
     install_requires=read('requirements.txt').splitlines(),
-
+    entry_points={"console_scripts": ["pareidolia=pareidolia.cli:pareidolia_cmd"]},
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         "Intended Audience :: Science/Research",
