@@ -2,7 +2,7 @@ language: python
 env:
   global:
   - PROJECT_NAME=pareidolia
-  - GITHUB_REPO_NAME=cmdoret/pareidolia
+  - GITHUB_REPO_NAME=koszullab/pareidolia
 matrix:
   include:
   - python: '3.6'
