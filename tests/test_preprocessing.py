@@ -19,12 +19,12 @@ MAP_PARAMS = (
 )
 
 
-def gen_mats(seed, shape, n=4, format="csr", density=0.1):
+def gen_mats(seed, shape, n=4, fmt="csr", density=0.1):
     """Helper function generating a list of random sparse matrices"""
 
     np.random.seed(seed)
     dens = density * np.random.random()
-    mats = [sp.random(*shape, density=dens, format=format) for i in range(4)]
+    mats = [sp.random(*shape, density=dens, format=fmt) for i in range(n)]
     return mats
 
 
@@ -74,7 +74,7 @@ def test_fill_nnz(seed, shape):
 @pytest.mark.parametrize(*MAP_PARAMS)
 def test_get_common_valid_bins(seed, shape):
     """Test if common valid bins indices are correct"""
-    
+
     mats = gen_mats(seed, shape)
     np.random.seed(seed)
     max_idx = min(shape)
