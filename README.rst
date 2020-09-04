@@ -5,12 +5,12 @@ pareidolia
     :target: https://pypi.python.org/pypi/pareidolia
     :alt: Latest PyPI version
 
-.. image:: https://travis-ci.com/cmdoret/pareidolia.png
-   :target: https://travis-ci.com/cmdoret/pareidolia
+.. image:: https://travis-ci.com/koszullab/pareidolia.png
+   :target: https://travis-ci.com/koszullab/pareidolia
    :alt: Latest Travis CI build status
 
-.. image:: https://codecov.io/gh/cmdoret/pareidolia/branch/master/graph/badge.svg
-  :target: https://codecov.io/gh/cmdoret/pareidolia
+.. image:: https://codecov.io/gh/koszullab/pareidolia/branch/master/graph/badge.svg
+  :target: https://codecov.io/gh/koszullab/pareidolia
 
 Multi-sample change detection in Hi-C patterns
 
