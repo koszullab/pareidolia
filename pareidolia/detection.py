@@ -14,6 +14,17 @@ def median_bg(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
     Given multiple sparse matrices with the same shape, format
     and nonzero coordinates, generate a background matrix made
     up of the median signal
+
+    Parameters
+    ----------
+    mats : Iterable of sp.spmatrix:
+        A list of data matrices from different samples.
+
+    Returns
+    -------
+    sp.spmatrix :
+        The median background matrix, where each pixel is the median of
+        the corresponding pixel from all samples.
     """
     if np.all([sp.issparse(m) for m in mats]):
         if not np.all([m.format == mats[0].format for m in mats]):
@@ -31,6 +42,18 @@ def reps_bg_diff(mats: Iterable[sp.spmatrix]) -> np.ndarray:
     between each sample matrix's pixels and their corresponding median
     background value. All input matrices must have the same shape, nonzero
     coordinates and format.
+
+    Parameters
+    ----------
+    mats : Iterable of sp.spmatrix
+        The list of data matrices from different samples.
+
+    Returns
+    -------
+    np.ndarray of floats :
+        The distribution of pixel differences to the median background. If
+        there are S matrices of P nonzero pixels, this 1D array will contain
+        P*S elements.
     """
     bg = median_bg(mats)
     diffs = [m.data - bg.data for m in mats]
@@ -44,8 +67,21 @@ def get_sse_mat(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
     squared errors to median. All input matrices must have the same shape,
     nonzero coordinates and format. Output matrix will have the same format
     as inputs.
+
+    Parameters
+    ----------
+    mats : Iterable of sp.spmatrix
+        The list of data matrices from different samples.
+
+    Returns
+    -------
+    sp.spmatrix :
+        A sparse matrix where each nonzero pixel is the sum of squared
+        difference of all samples to their median background, at the
+        corresponding nonzero pixel.
+
     """
-    bg = median_bg(*mats)
+    bg = median_bg(mats)
     sse = bg.copy()
     se = np.array([(m.data - bg.data) ** 2 for m in mats])
     sse.data = np.sum(se, axis=0)

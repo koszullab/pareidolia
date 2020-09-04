@@ -37,9 +37,7 @@ def get_min_contacts(
         if region is None:
             contacts[i] = clr.info["sum"]
         else:
-            contacts[i] = (
-                clr.matrix(balance=False, sparse=True).fetch(region).sum()
-            )
+            contacts[i] = clr.matrix(balance=False, sparse=True).fetch(region).sum()
     # Return the minimum coverage value (in number of contacts)
     return int(min(contacts))
 
@@ -86,20 +84,20 @@ def preprocess_hic(
 
 def coords_to_bins(clr: cooler.Cooler, coords: pd.DataFrame) -> np.ndarray:
     """
-        Converts genomic coordinates to a list of bin ids based on the whole genome
-        contact map.
+    Converts genomic coordinates to a list of bin ids based on the whole genome
+    contact map.
 
-        Parameters
-        ----------
-        coords : pandas.DataFrame
-            Table of genomic coordinates, with columns chrom, pos.
+    Parameters
+    ----------
+    coords : pandas.DataFrame
+        Table of genomic coordinates, with columns chrom, pos.
 
-        Returns
-        -------
-        numpy.array of ints :
-            Indices in the whole genome matrix contact map.
+    Returns
+    -------
+    numpy.array of ints :
+        Indices in the whole genome matrix contact map.
 
-        """
+    """
     coords.pos = (coords.pos // clr.binsize) * clr.binsize
     # Coordinates are merged with bins, both indices are kept in memory so that
     # the indices of matching bins can be returned in the order of the input
@@ -164,9 +162,7 @@ def detection_matrix(
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
     # Trim diagonals beyond max_dist to spare resources
-    samples["mat"] = map_fun(
-        cup.diag_trim, zip(samples["mat"], it.repeat(max_dist))
-    )
+    samples["mat"] = map_fun(cup.diag_trim, zip(samples["mat"], it.repeat(max_dist)))
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
@@ -207,9 +203,7 @@ def detection_matrix(
     # Get the union of nonzero coordinates across all samples
     total_nnz_set = pap.get_nnz_union(samples["mat"])
     # Fill zeros at these coordinates
-    samples["mat"] = samples["mat"].apply(
-        lambda cor: pap.fill_nnz(cor, total_nnz_set)
-    )
+    samples["mat"] = samples["mat"].apply(lambda cor: pap.fill_nnz(cor, total_nnz_set))
     if n_cpus > 1:
         pool.close()
     # Compute background for each condition
@@ -277,6 +271,40 @@ def change_detection_pipeline(
 
     Positive diff_scores mean the pattern intensity was increased relative to
     control (first condition).
+
+    Parameters
+    ----------
+    cool_files : Iterable of strs
+        The list of paths to cool files for the input samples.
+    conditions : Iterable of strs
+        The list of conditions matching the samples.
+    kernel : np.array of floats or str
+        Either the kernel to use as pattern as a numpy array, or the name of a
+        valid chromosight pattern.
+    bed2d_file : str or None
+        Path to a bed2D file containing a list of 2D positions. If this is
+        provided, pattern changes at these coordinates will be quantified.
+        Otherwise, they will be detected based on a threshold.
+    region : str or iterable of strs
+        Either a single UCSC format region string, or a list of multiple
+        regions. The analysis will be restricted to those regions.
+    max_dist : int or None
+        Maximum interaction distance (in basepairs) to consider in the analysis.
+        If this is not specified and a chromosight kernel was specified, the
+        default max_dist for that kernel is used. If the case of a custom kernel,
+        the whole matrix will be scanned if no max_dist is specified.
+    subsample : bool
+        Whether all input matrices should be subsampled to the same number of
+        contacts as the least covered sample.
+    percentile_thresh : float or None
+        The significance threshold to use when detecting changes.
+    n_cpus : int
+        Number of CPU cores to allocate for parallel operations.
+
+    Returns
+    -------
+    pd.DataFrame :
+        The list of reported 2D coordinates and their change intensities.
     """
     # Make sure each sample has an associated condition
     if len(cool_files) != len(conditions):
@@ -300,12 +328,8 @@ def change_detection_pipeline(
             "Kernel must either be a valid chromosight pattern name, or a 2D numpy.ndarray of floats"
         )
     # Associate samples with their conditions
-    samples = pd.DataFrame(
-        {"cond": conditions, "cool": pai.get_coolers(cool_files)}
-    )
-    print(
-        f"Changes will be computed relative to condition: {samples.cond.values[0]}"
-    )
+    samples = pd.DataFrame({"cond": conditions, "cool": pai.get_coolers(cool_files)})
+    print(f"Changes will be computed relative to condition: {samples.cond.values[0]}")
     # Define each chromosome as a region, if None specified
     clr = samples.cool.values[0]
     if max_dist is not None:
@@ -349,9 +373,7 @@ def change_detection_pipeline(
         # If positions were provided, return the change value for each of them
         if bed2d_file:
             tmp_chr = reg.split(":")[0]
-            tmp_rows = (positions.chrom1 == tmp_chr) & (
-                positions.chrom2 == tmp_chr
-            )
+            tmp_rows = (positions.chrom1 == tmp_chr) & (positions.chrom2 == tmp_chr)
             # If there are no positions of interest on this chromosome, just
             # skip it
             if not np.any(tmp_rows):
@@ -360,9 +382,7 @@ def change_detection_pipeline(
             # Convert both coordinates from genomic coords to bins
             for i in [1, 2]:
                 tmp_pos["chrom"] = tmp_pos[f"chrom{i}"]
-                tmp_pos["pos"] = (
-                    tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
-                ) // 2
+                tmp_pos["pos"] = (tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]) // 2
                 tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos).astype(int)
                 # Save bin coordinates from current chromosome to the full table
                 positions.loc[tmp_rows, f"bin{i}"] = tmp_pos[f"bin{i}"]
