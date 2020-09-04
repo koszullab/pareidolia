@@ -26,11 +26,13 @@ def median_bg(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
         The median background matrix, where each pixel is the median of
         the corresponding pixel from all samples.
     """
-    if np.all([sp.issparse(m) for m in mats]):
-        if not np.all([m.format == mats[0].format for m in mats]):
-            raise ValueError("All input matrices must be in the same format.")
-    else:
+    # Check that all matrices are sparse, have the same format and sparsity
+    if not np.all([sp.issparse(m) for m in mats]):
         raise ValueError("Input must be a scipy sparse matrix.")
+    if not np.all([m.format == mats[0].format for m in mats]):
+        raise ValueError("All input matrices must be in the same format.")
+    if not np.all([m.getnnz() == mats[0].getnnz() for m in mats]):
+        raise ValueError("All input matrices must have the same sparsity.")
     bg = mats[0].copy()
     bg.data = np.median([m.data for m in mats], axis=0)
     return bg
@@ -55,8 +57,8 @@ def reps_bg_diff(mats: Iterable[sp.spmatrix]) -> np.ndarray:
         there are S matrices of P nonzero pixels, this 1D array will contain
         P*S elements.
     """
-    bg = median_bg(mats)
-    diffs = [m.data - bg.data for m in mats]
+    med_bg = median_bg(mats)
+    diffs = [m.data - med_bg.data for m in mats]
     diffs = np.hstack(diffs)
     return diffs
 
