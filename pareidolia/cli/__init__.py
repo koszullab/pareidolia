@@ -45,7 +45,7 @@ from .. import __version__
 @click.option(
     "--max-dist",
     "-M",
-    default=1000000,
+    default='auto',
     show_default=True,
     help=(
         "Maximum interaction distance (in basepairs) at which patterns should"
@@ -100,12 +100,14 @@ def pareidolia_cmd(
     # If the kernel name is not valid, assumes it's a custom kernel file
     except AttributeError:
         try:
-            kernel = np.loadtxt(kernel)
+            _ = np.loadtxt(kernel)
         except OSError:
             raise ValueError(
                 "kernel must either be a valid kernel name or path to a"
                 " text file (see --help)."
             )
+    if max_dist == 'auto':
+        max_dist = None
     # Get lists from comma-separated items
     cool_files = _parse_cli_list(cool_files)
     conditions = _parse_cli_list(conditions)

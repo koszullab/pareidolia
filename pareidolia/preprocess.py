@@ -129,4 +129,5 @@ def fill_nnz(
     add_mask = np.in1d(all_nnz.view(dtype), mat_nnz.view(dtype), invert=True)
     # Replace implicit zeros by fill_value at these coordinates
     out[all_nnz[add_mask, 0], all_nnz[add_mask, 1]] = fill_value
+    out.eliminate_zeros()
     return out

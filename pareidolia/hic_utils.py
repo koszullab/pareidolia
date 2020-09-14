@@ -200,6 +200,7 @@ def detection_matrix(
     samples["mat"] = [tup[0] for tup in corrs]
     del corrs
     print(f"{region} correlation matrices computed", file=sys.stderr)
+
     # Get the union of nonzero coordinates across all samples
     total_nnz_set = pap.get_nnz_union(samples["mat"])
     # Fill zeros at these coordinates
