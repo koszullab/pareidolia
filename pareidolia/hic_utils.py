@@ -20,6 +20,7 @@ import chromosight.kernels as ck
 import pareidolia.io as pai
 import pareidolia.preprocess as pap
 import pareidolia.detection as pad
+import pareidolia.stats as pas
 import multiprocessing as mp
 
 
@@ -37,7 +38,9 @@ def get_min_contacts(
         if region is None:
             contacts[i] = clr.info["sum"]
         else:
-            contacts[i] = clr.matrix(balance=False, sparse=True).fetch(region).sum()
+            contacts[i] = (
+                clr.matrix(balance=False, sparse=True).fetch(region).sum()
+            )
     # Return the minimum coverage value (in number of contacts)
     return int(min(contacts))
 
@@ -126,6 +129,7 @@ def detection_matrix(
     subsample: Optional[int] = None,
     max_dist: Optional[int] = None,
     percentile_thresh: Optional[float] = 95.0,
+    mode="median",
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
     """
@@ -162,7 +166,9 @@ def detection_matrix(
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
     # Trim diagonals beyond max_dist to spare resources
-    samples["mat"] = map_fun(cup.diag_trim, zip(samples["mat"], it.repeat(max_dist)))
+    samples["mat"] = map_fun(
+        cup.diag_trim, zip(samples["mat"], it.repeat(max_dist))
+    )
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
@@ -204,40 +210,56 @@ def detection_matrix(
     # Get the union of nonzero coordinates across all samples
     total_nnz_set = pap.get_nnz_union(samples["mat"])
     # Fill zeros at these coordinates
-    samples["mat"] = samples["mat"].apply(lambda cor: pap.fill_nnz(cor, total_nnz_set))
+    samples["mat"] = samples["mat"].apply(
+        lambda cor: pap.fill_nnz(cor, total_nnz_set)
+    )
     if n_cpus > 1:
         pool.close()
-    # Compute background for each condition
-    backgrounds = samples.groupby("cond")["mat"].apply(
-        lambda g: pad.median_bg(g.reset_index(drop=True))
-    )
-    # Get the distribution of difference to background within each condition
-    within_diffs = np.hstack(
-        samples.groupby("cond")["mat"].apply(
-            lambda g: pad.reps_bg_diff(g.reset_index(drop=True))
-        )
-    )
-    # Use average difference to first background as change metric
-    diff = sp.csr_matrix(backgrounds[0].shape)
-    conditions = np.unique(samples.cond)
-    conditions = conditions[conditions != control]
-    for c in conditions:
-        diff += backgrounds[c] - backgrounds[control]
-    diff.data /= len(backgrounds) - 1
-    # Apply threshold to differences based on within-condition variations
-    try:
-        if percentile_thresh is None:
-            thresh = None
-        else:
-            thresh = np.percentile(
-                abs(within_diffs[within_diffs != 0]), percentile_thresh
-            )
-            diff.data[np.abs(diff.data) < thresh] = 0.0
-    # If there is no nonzero value (e.g. very small matrices), return nothing
-    except IndexError:
-        diff = None
-        thresh = None
 
+    # Fewer than 3 replicates: use median background
+    if mode == "median":
+        # Compute background for each condition
+        backgrounds = samples.groupby("cond")["mat"].apply(
+            lambda g: pad.median_bg(g.reset_index(drop=True))
+        )
+        # Get the distribution of difference to background within each condition
+        within_diffs = np.hstack(
+            samples.groupby("cond")["mat"].apply(
+                lambda g: pad.reps_bg_diff(g.reset_index(drop=True))
+            )
+        )
+        # Use average difference to first background as change metric
+        diff = sp.csr_matrix(backgrounds[0].shape)
+        conditions = np.unique(samples.cond)
+        conditions = conditions[conditions != control]
+        for c in conditions:
+            diff += backgrounds[c] - backgrounds[control]
+        diff.data /= len(backgrounds) - 1
+        # Apply threshold to differences based on within-condition variations
+        try:
+            if percentile_thresh is None:
+                thresh = None
+            else:
+                thresh = np.percentile(
+                    abs(within_diffs[within_diffs != 0]), percentile_thresh
+                )
+                diff.data[np.abs(diff.data) < thresh] = 0.0
+        # If there is no nonzero value (e.g. very small matrices), return nothing
+        except IndexError:
+            diff = None
+            thresh = None
+    # At least 3 replicates: Use t-test
+    else:
+        # Compute background for each condition
+        arr_control = np.dstack(
+            [m.data for m in samples.mat[samples.cond == control]]
+        )[0, :, :]
+        arr_alt = np.dstack(
+            [m.data for m in samples.mat[samples.cond != control]]
+        )[0, :, :]
+        diff = samples["mat"][0]
+        diff.data = pas.vec_ttest(arr_control, arr_alt)
+        thresh = 0.05
     return diff, thresh
 
 
@@ -313,6 +335,23 @@ def change_detection_pipeline(
             "The lists of cool files and conditions must have the same length"
         )
 
+    # Use statistical tests if there are more than 3 samples, otherwise use
+    # median background.
+    mode = "stat" if len(cool_files) > 3 else "median"
+    if len(cool_files) > 3:
+        mode = "stat"
+        print(
+            "Running in t-test mode, t-values will be used as diff scores.",
+            file=sys.stderr,
+        )
+    else:
+        mode = "median"
+        print(
+            "Fewer than 4 output samples, running in median background mode."
+            "Median differences used as diff-score",
+            file=sys.stderr,
+        )
+
     # If a pattern name was provided, load corresponding chromosight kernel
     if isinstance(kernel, str):
         kernel_name = kernel
@@ -329,8 +368,12 @@ def change_detection_pipeline(
             "Kernel must either be a valid chromosight pattern name, or a 2D numpy.ndarray of floats"
         )
     # Associate samples with their conditions
-    samples = pd.DataFrame({"cond": conditions, "cool": pai.get_coolers(cool_files)})
-    print(f"Changes will be computed relative to condition: {samples.cond.values[0]}")
+    samples = pd.DataFrame(
+        {"cond": conditions, "cool": pai.get_coolers(cool_files)}
+    )
+    print(
+        f"Changes will be computed relative to condition: {samples.cond.values[0]}"
+    )
     # Define each chromosome as a region, if None specified
     clr = samples.cool.values[0]
     if max_dist is not None:
@@ -367,6 +410,7 @@ def change_detection_pipeline(
             max_dist=max_dist,
             percentile_thresh=percentile_thresh,
             n_cpus=n_cpus,
+            mode=mode,
         )
         # If the matrix was too small, skip it
         if thresh is None and percentile_thresh is not None:
@@ -374,7 +418,9 @@ def change_detection_pipeline(
         # If positions were provided, return the change value for each of them
         if bed2d_file:
             tmp_chr = reg.split(":")[0]
-            tmp_rows = (positions.chrom1 == tmp_chr) & (positions.chrom2 == tmp_chr)
+            tmp_rows = (positions.chrom1 == tmp_chr) & (
+                positions.chrom2 == tmp_chr
+            )
             # If there are no positions of interest on this chromosome, just
             # skip it
             if not np.any(tmp_rows):
@@ -383,7 +429,9 @@ def change_detection_pipeline(
             # Convert both coordinates from genomic coords to bins
             for i in [1, 2]:
                 tmp_pos["chrom"] = tmp_pos[f"chrom{i}"]
-                tmp_pos["pos"] = (tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]) // 2
+                tmp_pos["pos"] = (
+                    tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
+                ) // 2
                 tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos).astype(int)
                 # Save bin coordinates from current chromosome to the full table
                 positions.loc[tmp_rows, f"bin{i}"] = tmp_pos[f"bin{i}"]
