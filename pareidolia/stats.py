@@ -71,3 +71,11 @@ def tvals_to_pvals(tvals, n_samples):
     # get p-values from test statistics using the cumulative distribution
     # function of the student distribution
     return 1 - ss.t.cdf(np.abs(tvals), df=n_samples - 1)
+
+
+def pval_to_tval(pval, n_samples):
+    """Conversion of a single p-value to corresponding t
+    Given a desired p-value and sample size, return the corresponding t-value.
+    The absolute value for the 2 sided hypothesis is returned.
+    """
+    return abs(ss.t.ppf(pval / 2, df=n_samples - 1))

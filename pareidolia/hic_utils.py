@@ -215,7 +215,6 @@ def detection_matrix(
     )
     if n_cpus > 1:
         pool.close()
-
     # Fewer than 3 replicates: use median background
     if mode == "median":
         # Compute background for each condition
@@ -259,7 +258,11 @@ def detection_matrix(
         )[0, :, :]
         diff = samples["mat"][0]
         diff.data = pas.vec_ttest(arr_control, arr_alt)
-        thresh = 0.05
+        # The threshold is the t-value corresponding to p=0.05
+        thresh = pas.pval_to_tval(
+            1 - percentile_thresh / 100,
+            arr_control.shape[1] + arr_alt.shape[1],
+        )
     return diff, thresh
 
 
@@ -273,6 +276,7 @@ def change_detection_pipeline(
     subsample: bool = True,
     percentile_thresh: Optional[float] = 95.0,
     n_cpus: int = 4,
+    mode="median",
 ) -> pd.DataFrame:
     """
     Run end to end pattern change detection pipeline on input cool files. A
@@ -323,6 +327,10 @@ def change_detection_pipeline(
         The significance threshold to use when detecting changes.
     n_cpus : int
         Number of CPU cores to allocate for parallel operations.
+    mode : str
+        Algorithm used for change detection. Can be median or stat. Median is
+        the default, stat is experimental and should only be used with at least
+        3 samples per condition.
 
     Returns
     -------
@@ -335,20 +343,9 @@ def change_detection_pipeline(
             "The lists of cool files and conditions must have the same length"
         )
 
-    # Use statistical tests if there are more than 3 samples, otherwise use
-    # median background.
-    mode = "stat" if len(cool_files) > 3 else "median"
-    if len(cool_files) > 3:
-        mode = "stat"
+    if mode == "stat":
         print(
             "Running in t-test mode, t-values will be used as diff scores.",
-            file=sys.stderr,
-        )
-    else:
-        mode = "median"
-        print(
-            "Fewer than 4 output samples, running in median background mode."
-            "Median differences used as diff-score",
             file=sys.stderr,
         )
 
