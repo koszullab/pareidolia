@@ -14,15 +14,40 @@ pareidolia
 
 Multi-sample change detection in Hi-C patterns
 
-Pareidolia is a toolkit for detecting changes in pattern intensities from Hi-C maps. It can be used to compare samples from different conditions and use multiple replicates to improve results. 
+Pareidolia for detects changes in intensities of a specific pattern (e.g. chromatin loops and domain borders) from Hi-C maps.
+It can be used to compare samples from different conditions and use multiple replicates to improve results.
 
 This toolkit exploits chromosight's correlation maps, allowing the same method to detect changes in different Hi-C patterns (e.g. loops or borders).
 
 Usage
 -----
 
-The api is currently a WIP and will be exposed through a command line interface in the future.
+Pareidolia can be used both as a python package and as a command line tool:
 
+.. code-block:: python
+
+  import pareidolia.hic_utils as pah
+  import chromosight.kernels as ck
+  pah.change_detection_pipeline(
+    ["ctrl1.cool", "ctrl2.cool", "treat1.cool", "treat2.cool"],
+    ["control", "control", "treatment", "treatment"],
+    kernel=ck.loops,
+    subsample=True,
+    n_cpus=8,
+  )
+
+We can also use the CLI to execute the same instruction:
+
+.. code-block:: bash
+  pareidolia -n 8 \
+             -k loops \
+             ctrl1.cool,ctrl2.cool,treat1.cool,treat2.cool \
+             control,control,treatment,treatment \
+             output.tsv
+
+Pareidolia can either detect changes *de-novo*, or compute the change intensity at a set of input positions.
+The input positions can be provided as a bed2d (=bedpe) file, containing a list of 2D genomic coordinates.
+This file can be provided with the `--bed2d-file` option on the CLI, or using the `bed2d_file` parameter in the python API.
 Installation
 ------------
 
