@@ -24,7 +24,7 @@ from .. import __version__
 @click.option(
     "--kernel",
     "-k",
-    default='loops',
+    default="loops",
     show_default=True,
     help=(
         "A kernel name or a tab-separated text file containing a square kernel"
@@ -45,7 +45,7 @@ from .. import __version__
 @click.option(
     "--max-dist",
     "-M",
-    default='auto',
+    default="auto",
     show_default=True,
     help=(
         "Maximum interaction distance (in basepairs) at which patterns should"
@@ -54,13 +54,21 @@ from .. import __version__
     ),
 )
 @click.option(
-    "--perc-thresh",
-    "-p",
-    default=95,
+    "--mode",
+    "-d",
+    default="median",
     show_default=True,
     help=(
-        "Threshold to apply when detecting pattern changes."
+        "Statistical method to use for detection. 'median' for median"
+        " background filter, stat for t-test."
     ),
+)
+@click.option(
+    "--perc-thresh",
+    "-p",
+    default=99,
+    show_default=True,
+    help=("Threshold to apply when detecting pattern changes."),
 )
 @click.option(
     "--no-subsample",
@@ -90,6 +98,7 @@ def pareidolia_cmd(
     max_dist,
     no_subsample,
     perc_thresh,
+    mode,
     n_cpus,
 ):
     """Run the pattern change detection pipeline"""
@@ -106,11 +115,13 @@ def pareidolia_cmd(
                 "kernel must either be a valid kernel name or path to a"
                 " text file (see --help)."
             )
-    if max_dist == 'auto':
+    if max_dist == "auto":
         max_dist = None
     # Get lists from comma-separated items
     cool_files = _parse_cli_list(cool_files)
     conditions = _parse_cli_list(conditions)
+
+    # Start the detection pipeline
     changes = pah.change_detection_pipeline(
         cool_files=cool_files,
         conditions=conditions,
@@ -121,8 +132,11 @@ def pareidolia_cmd(
         subsample=not no_subsample,
         percentile_thresh=perc_thresh,
         n_cpus=n_cpus,
+        mode=mode,
     )
-    changes.to_csv(outfile, sep='\t', index=False)
+
+    # Save results to text file
+    changes.to_csv(outfile, sep="\t", index=False)
 
 
 def _parse_cli_list(items):

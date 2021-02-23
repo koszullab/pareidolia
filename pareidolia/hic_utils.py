@@ -153,6 +153,7 @@ def detection_matrix(
     else:
         map_fun = lambda x, y: [x(*args) for args in y]
 
+    # Hi-C specific preprocessing individual matrices (subsample, balance, detrend)
     samples["mat"] = map_fun(
         preprocess_hic,
         zip(samples.cool, it.repeat(min_contacts), it.repeat(region)),
@@ -343,7 +344,7 @@ def change_detection_pipeline(
             "The lists of cool files and conditions must have the same length"
         )
 
-    if mode == "stat":
+    if mode != "median":
         print(
             "Running in t-test mode, t-values will be used as diff scores.",
             file=sys.stderr,
