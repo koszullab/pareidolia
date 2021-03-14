@@ -80,8 +80,7 @@ def test_change_detection():
     for target in LOOPS:
         if tuple(target.astype(int)) in valid_pos:
             found += 1
-
-    assert found / LOOPS.shape[0] >= 0.5
+    assert found / LOOPS.shape[0] >= 0.3
 
 
 def test_change_quantification():
@@ -97,8 +96,8 @@ def test_change_quantification():
         percentile_thresh=95,
     )
     diff = obs_pos.diff_score
-    # Check if change was detected in at least half the positions
-    assert len(diff[diff < 0]) >= len(diff) * 0.5
+    # Check if change was detected in at least 30% of the positions
+    assert len(diff[diff < 0]) >= len(diff) * 0.3
 
 
 def test_change_no_threshold():

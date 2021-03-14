@@ -228,13 +228,25 @@ def detection_matrix(
                 lambda g: pad.reps_bg_diff(g.reset_index(drop=True))
             )
         )
-        # Use average difference to first background as change metric
-        diff = sp.csr_matrix(backgrounds[0].shape)
+        # Compute sse for each condition
+        sse = samples.groupby("cond")["mat"].apply(
+            lambda g: pad.get_sse_mat(g.reset_index(drop=True))
+        )
         conditions = np.unique(samples.cond)
-        conditions = conditions[conditions != control]
+        # Compute difference between conditions and signal
+        # to noise ratio
+        snr = np.zeros(sse[0].data.shape)
+        diff = sp.csr_matrix(sse[0].shape)
         for c in conditions:
-            diff += backgrounds[c] - backgrounds[control]
-        diff.data /= len(backgrounds) - 1
+            snr += backgrounds[c].data / np.sqrt(sse[c].data)
+            if c != control:
+                diff += backgrounds[c] - backgrounds[control]
+        snr /= len(conditions)
+        # Use average difference to first background as change metric
+        diff.data /= len(conditions) - 1
+        # Threshold data on backgroun/sse value
+
+        diff.data[snr < 0.8] = 0.0
         # Apply threshold to differences based on within-condition variations
         try:
             if percentile_thresh is None:
@@ -274,6 +286,7 @@ def change_detection_pipeline(
     bed2d_file: Optional[str] = None,
     region: Optional[Union[Iterable[str], str]] = None,
     max_dist: Optional[int] = None,
+    min_dist: Optional[int] = None,
     subsample: bool = True,
     percentile_thresh: Optional[float] = 95.0,
     n_cpus: int = 4,
@@ -357,6 +370,8 @@ def change_detection_pipeline(
             kernel = getattr(ck, kernel_name)["kernels"][0]
             if max_dist is None:
                 max_dist = getattr(ck, kernel_name)["max_dist"]
+            if min_dist is None:
+                min_dist = getattr(ck, kernel_name)["min_dist"]
         except AttributeError:
             raise AttributeError(f"{kernel_name} is not a valid pattern name")
     elif isinstance(kernel, np.ndarray):
@@ -376,6 +391,8 @@ def change_detection_pipeline(
     clr = samples.cool.values[0]
     if max_dist is not None:
         max_dist = max_dist // clr.binsize
+    if min_dist is not None:
+        min_dist = min_dist // clr.binsize
     if region is None:
         regions = clr.chroms()[:]["name"].tolist()
     elif isinstance(region, str):
@@ -463,4 +480,9 @@ def change_detection_pipeline(
             # Append new chromosome's rows
             positions = pd.concat([positions, tmp_pos], axis=0)
     positions = positions.loc[:, pos_cols]
+    positions = positions.loc[
+        abs(positions.bin2 - positions.bin1) >= min_dist, :
+    ].reset_index(drop=True)
+    print(min_dist)
+    print(positions)
     return positions
