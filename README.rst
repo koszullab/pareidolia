@@ -5,9 +5,9 @@ pareidolia
     :target: https://pypi.python.org/pypi/pareidolia
     :alt: Latest PyPI version
 
-.. image:: https://travis-ci.com/koszullab/pareidolia.png
-   :target: https://travis-ci.com/koszullab/pareidolia
-   :alt: Latest Travis CI build status
+.. image:: https://github.com/koszullab/pareidolia/actions/workflows/python-package.yml/badge.svg
+   :target: https://github.com/koszullab/pareidolia/actions/workflows/python-package.yml
+   :alt: build
 
 .. image:: https://codecov.io/gh/koszullab/pareidolia/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/koszullab/pareidolia
