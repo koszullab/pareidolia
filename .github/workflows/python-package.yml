@@ -30,3 +30,4 @@ jobs:
       run: |
         pytest --pylint --pylint-error-types=EF --pylint-rcfile=.pylintrc
         pytest --cov=pareidolia tests
+        codecov
