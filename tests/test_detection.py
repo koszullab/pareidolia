@@ -65,8 +65,10 @@ def test_median_bg(shape):
         pad.median_bg(bad_mats)
 
 
-def test_reps_bg_diff():
+def test_reps_bg_diff(shape):
+    """Test computation of distribution of differences to median background """
     ...
+
 
 
 def test_get_sse_mat():
