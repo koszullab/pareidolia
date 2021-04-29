@@ -32,7 +32,7 @@ def gen_mats(shape, n_mats=4, density=0.8):
     mats = [None] * n_mats
     for i in range(n_mats):
         mat = sp.csr_matrix(shape)
-        mat[picked_rows, picked_cols] = np.random.random()
+        mat[picked_rows, picked_cols] = np.random.random(size=len(picked_coords))
         mats[i] = mat
 
     return mats
@@ -65,11 +65,23 @@ def test_median_bg(shape):
         pad.median_bg(bad_mats)
 
 
+@pytest.mark.parametrize(*MAP_PARAMS)
 def test_reps_bg_diff(shape):
     """Test computation of distribution of differences to median background """
-    ...
+    mats = gen_mats(shape)
+    obs_diff = pad.reps_bg_diff(mats)
+    # Test the number of points in the distribution
+    assert obs_diff.shape[0] == len(mats[0].data) * len(mats)
 
 
 
-def test_get_sse_mat():
-    ...
+@pytest.mark.parametrize(*MAP_PARAMS)
+def test_get_sse_mat(shape):
+    """Test generation of SSE matrix with sparse operations"""
+    # Compare with dense equivalent
+    mats = gen_mats(shape)
+    bg_dense = pad.median_bg(mats).toarray()
+    se_dense = np.array([(m.toarray() - bg_dense)**2 for m in mats])
+    sse_dense = np.sum(se_dense, axis=0)
+    sse_sparse = pad.get_sse_mat(mats)
+    assert np.all(sse_dense == sse_sparse)
