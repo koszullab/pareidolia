@@ -247,9 +247,8 @@ def detection_matrix(
         snr /= len(conditions)
         # Use average difference to first background as change metric
         diff.data /= len(conditions) - 1
-        # Threshold data on backgroun/sse value
-
-        diff.data[snr < 0.8] = 0.0
+        # Threshold data on background / sse value
+        diff.data[snr < 1.5] = 0.0
         # Apply threshold to differences based on within-condition variations
         try:
             if percentile_thresh is None:
@@ -399,7 +398,9 @@ def change_detection_pipeline(
     if region is None:
         regions = clr.chroms()[:]["name"].tolist()
     elif isinstance(region, str):
-        region = [region]
+        regions = [region]
+    else:
+        regions = region
     pos_cols = [
         "chrom1",
         "start1",
