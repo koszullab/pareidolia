@@ -240,6 +240,9 @@ def detection_matrix(
         for c in conditions:
             snr += backgrounds[c].data / np.sqrt(sse[c].data)
             if c != control:
+                # Break ties to preserve sparsity (do not introduce 0s)
+                ties = backgrounds[c].data == backgrounds[control].data
+                backgrounds[c].data[ties] += 1e-06
                 diff += backgrounds[c] - backgrounds[control]
         snr /= len(conditions)
         # Use average difference to first background as change metric
