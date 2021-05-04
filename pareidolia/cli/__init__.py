@@ -39,7 +39,7 @@ from .. import __version__
     show_default=True,
     help=(
         "Optional comma-separated list of regions in UCSC format (e.g."
-        " chr1:1000-40000) at which detection should operage."
+        " chr1:1000-40000) at which detection should operate."
     ),
 )
 @click.option(
