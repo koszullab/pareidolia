@@ -64,9 +64,9 @@ from .. import __version__
     ),
 )
 @click.option(
-    "--perc-thresh",
+    "--pearson",
     "-p",
-    default=99,
+    default=None,
     show_default=True,
     help=("Threshold to apply when detecting pattern changes."),
 )
@@ -97,7 +97,7 @@ def pareidolia_cmd(
     region,
     max_dist,
     no_subsample,
-    perc_thresh,
+    pearson,
     mode,
     n_cpus,
 ):
@@ -130,7 +130,7 @@ def pareidolia_cmd(
         region=region,
         max_dist=max_dist,
         subsample=not no_subsample,
-        percentile_thresh=perc_thresh,
+        pearson_thresh=pearson,
         n_cpus=n_cpus,
         mode=mode,
     )
