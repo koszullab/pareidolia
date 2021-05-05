@@ -15,8 +15,8 @@ import pareidolia.io as pai
 
 DATA = pathlib.Path("data_test")
 # Synthetic matrices and their known loop coordinates
-COOLS = [str(c) for c in DATA.glob("A_[1-6]*.cool")]
-LOOPS = np.loadtxt(DATA / "A_loops.txt")
+COOLS = [str(c) for c in DATA.glob("B_[1-6]*.cool")]
+LOOPS = np.loadtxt(DATA / "B_loops.txt")
 # Matrices with a diagonal gradient
 COOLS_COMP = [str(c) for c in DATA.glob("smooth_[1-6]*.cool")]
 COOL_IN = ("cool", COOLS)
@@ -25,14 +25,14 @@ REGION = "chr0:100000-120000"
 
 def test_get_min_contacts():
     """Test if lowest contact value is found correctly"""
-    min_exp = 44035
+    min_exp = 200606
     min_obs = pah.get_min_contacts(pai.get_coolers(COOLS))
     assert min_obs == min_exp
 
 
 def test_get_min_contacts_region():
     """Test if lowest contact value is found correctly"""
-    min_exp = 376
+    min_exp = 415
     min_obs = pah.get_min_contacts(pai.get_coolers(COOLS), REGION)
     assert min_obs == min_exp
 
@@ -66,37 +66,35 @@ def test_change_detection():
     """Test if change detection pipeline finds some relevant positions"""
     # Run loop change detection between matrices with and without loops
     cools = COOLS + COOLS_COMP
-    conds = ["A"] * len(COOLS) + ["B"] * len(COOLS_COMP)
+    conds = ["B"] * len(COOLS) + ["S"] * len(COOLS_COMP)
     obs_pos = pah.change_detection_pipeline(
-        cools, conds, subsample=False, percentile_thresh=95, mode="median"
+        cools, conds, subsample=False, mode="median"
     )
     # Build a set of fuzzy (+/3 pixels around) positions found
     valid_pos = set()
     for pos in obs_pos.loc[:, ["bin1", "bin2"]].values:
-        for shift in it.combinations(range(-3, 4), 2):
+        for shift in it.product(range(-3, 4), range(-3, 4)):
             valid_pos.add((pos[0] + shift[0], pos[1] + shift[1]))
     # Count the number of real loop positions that were found
     found = 0
     for target in LOOPS:
         if tuple(target.astype(int)) in valid_pos:
             found += 1
-    assert found / LOOPS.shape[0] >= 0.3
+    print(f"Found {found} out of {LOOPS.shape[0]} loops.")
+    assert found / LOOPS.shape[0] >= 0.5
 
 
 def test_change_quantification():
     """Test if change detection pipeline change at input positions"""
     # Run loop change detection between matrices with and without loops
     cools = COOLS + COOLS_COMP
-    conds = ["A"] * len(COOLS) + ["B"] * len(COOLS_COMP)
+    conds = ["B"] * len(COOLS) + ["S"] * len(COOLS_COMP)
     obs_pos = pah.change_detection_pipeline(
-        cools,
-        conds,
-        bed2d_file=str(DATA / "A_loops.bed2d"),
-        subsample=False,
-        percentile_thresh=95,
+        cools, conds, bed2d_file=str(DATA / "B_loops.bed2d"), subsample=False,
     )
     diff = obs_pos.diff_score
-    # Check if change was detected in at least 30% of the positions
+    # Check if change was detected in the correct direction (disappearing)
+    # some positions
     assert len(diff[diff < 0]) >= len(diff) * 0.3
 
 
@@ -104,14 +102,14 @@ def test_change_no_threshold():
     """Test if change detection pipeline without threshold reports all input positions"""
     # Run loop change detection between matrices with and without loops
     cools = COOLS + COOLS_COMP
-    conds = ["A"] * len(COOLS) + ["B"] * len(COOLS_COMP)
-    bed2d = pd.read_csv(str(DATA / "A_loops.bed2d"), sep="\t")
+    conds = ["B"] * len(COOLS) + ["S"] * len(COOLS_COMP)
+    bed2d = pd.read_csv(str(DATA / "B_loops.bed2d"), sep="\t")
     obs_pos = pah.change_detection_pipeline(
         cools,
         conds,
-        bed2d_file=str(DATA / "A_loops.bed2d"),
+        bed2d_file=str(DATA / "B_loops.bed2d"),
         subsample=False,
-        percentile_thresh=None,
+        pearson_thresh=None,
     )
     diff = obs_pos.diff_score
     # Check if diff scores are returned for all positions
