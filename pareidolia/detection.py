@@ -7,6 +7,8 @@ cmdoret, 20200403
 from typing import Iterable
 import scipy.sparse as sp
 import numpy as np
+import chromosight.utils.detection as cud
+import chromosight.utils.preprocessing as cup
 
 
 def median_bg(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
@@ -88,3 +90,37 @@ def get_sse_mat(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
     se = np.array([(m.data - bg.data) ** 2 for m in mats])
     sse.data = np.sum(se, axis=0)
     return sse
+
+
+def get_win_density(mat, winsize=3, sym_upper=False):
+    """Compute pixel density in local windows using convolution. The convolution
+    is performed in 'valid' mode: only positions where the kernel can be centered
+    are computed, edges are left as 0.
+
+    Examples
+    --------
+    >>> mat = np.array(
+            [[0, 0, 0, 0, 1],
+             [0, 1, 1, 1, 1],
+             [0, 0, 0, 0, 1],
+             [0, 0, 0, 0, 1],
+             [0, 0, 0, 0, 0]]
+    )
+    >>> get_win_density(mat, winsize=3)
+    array([[0., 0., 0., 0., 0.],
+           [0., 2., 3., 5., 0.],
+           [0., 2., 3., 5., 0.],
+           [0., 0., 0., 2., 0.],
+           [0., 0., 0., 0., 0.]])
+    """
+    # Generate a binary matrix (pixels are either empty or full)
+    bin_mat = mat.copy()
+    bin_mat.data = bin_mat.data.astype(bool)
+
+    # Convolve the uniform kernel with this matrix to get the count of nonzero
+    # pixels in each neighbourhood
+    kernel = np.ones((winsize, winsize))
+    density = cud.xcorr2(bin_mat, kernel)
+
+    return density
+
