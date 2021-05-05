@@ -393,6 +393,10 @@ def change_detection_pipeline(
                 pearson_thresh = getattr(ck, kernel_name)["pearson"]
         except AttributeError:
             raise AttributeError(f"{kernel_name} is not a valid pattern name")
+        print(f"Loading default parameter for kernel '{kernel_name}'...")
+        print(f"pearson_thresh: {pearson_thresh}")
+        print(f"min_dist: {min_dist}")
+        print(f"max_dist: {max_dist}")
     elif isinstance(kernel, np.ndarray):
         kernel_name = "custom kernel"
     else:
