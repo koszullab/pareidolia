@@ -13,8 +13,8 @@ import pareidolia.cli as pac
 
 DATA = pathlib.Path("data_test")
 # Synthetic matrices and their known loop coordinates
-COOLS = [str(c) for c in DATA.glob("A_[1-6]*.cool")]
-LOOPS = np.loadtxt(DATA / "A_loops.txt")
+COOLS = [str(c) for c in DATA.glob("B_[1-6]*.cool")]
+LOOPS = np.loadtxt(DATA / "B_loops.txt")
 # Matrices with a diagonal gradient
 COOLS_COMP = [str(c) for c in DATA.glob("smooth_[1-6]*.cool")]
 COOL_IN = ("cool", COOLS)
@@ -50,7 +50,7 @@ def test_change_detection():
             cools,
             conds,
             "--bed2d-file",
-            str(DATA / "A_loops.bed2d"),
+            str(DATA / "B_loops.bed2d"),
             out_f.name,
         ],
     )

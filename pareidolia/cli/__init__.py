@@ -20,6 +20,7 @@ from .. import __version__
         "Optional bed2d file containing pattern positions where changes should"
         " be measured (instead of detecting)."
     ),
+    type=click.Path(exists=True),
 )
 @click.option(
     "--kernel",
@@ -45,13 +46,14 @@ from .. import __version__
 @click.option(
     "--max-dist",
     "-M",
-    default="auto",
+    default=None,
     show_default=True,
     help=(
         "Maximum interaction distance (in basepairs) at which patterns should"
         " be detected. Reduce to accelerate detection and reduce memory"
         " usage."
     ),
+    type=int,
 )
 @click.option(
     "--mode",
@@ -64,17 +66,18 @@ from .. import __version__
     ),
 )
 @click.option(
-    "--perc-thresh",
+    "--pearson",
     "-p",
-    default=99,
+    default=None,
     show_default=True,
     help=("Threshold to apply when detecting pattern changes."),
+    type=float,
 )
 @click.option(
     "--no-subsample",
     "-s",
     default=False,
-    show_default=True,
+    show_default=False,
     help="Disable subsampling of input matrices to the same coverage.",
 )
 @click.option(
@@ -97,7 +100,7 @@ def pareidolia_cmd(
     region,
     max_dist,
     no_subsample,
-    perc_thresh,
+    pearson,
     mode,
     n_cpus,
 ):
@@ -115,8 +118,6 @@ def pareidolia_cmd(
                 "kernel must either be a valid kernel name or path to a"
                 " text file (see --help)."
             )
-    if max_dist == "auto":
-        max_dist = None
     # Get lists from comma-separated items
     cool_files = _parse_cli_list(cool_files)
     conditions = _parse_cli_list(conditions)
@@ -130,7 +131,7 @@ def pareidolia_cmd(
         region=region,
         max_dist=max_dist,
         subsample=not no_subsample,
-        percentile_thresh=perc_thresh,
+        pearson_thresh=pearson,
         n_cpus=n_cpus,
         mode=mode,
     )

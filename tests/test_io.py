@@ -10,7 +10,7 @@ import pareidolia.io as pai
 import cooler
 
 DATA = pathlib.Path("data_test")
-COOLS = [str(c) for c in DATA.glob("A_[1-6]*.cool")]
+COOLS = [str(c) for c in DATA.glob("B_[1-6]*.cool")]
 
 
 def test_get_coolers():
@@ -28,5 +28,5 @@ def test_get_coolers():
     assert str(err.value) == "Shapes are inconsistent."
     # Resolutions unmatched, should give an explicit error
     with pytest.raises(ValueError) as err:
-        assert pai.get_coolers(COOLS + [str(DATA / "A_rebin.cool")])
+        assert pai.get_coolers(COOLS + [str(DATA / "B_rebin.cool")])
     assert str(err.value) == "Resolutions are inconsistent."

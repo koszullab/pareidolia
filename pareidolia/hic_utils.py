@@ -9,10 +9,12 @@ cmdoret, 20200404
 import sys
 import itertools as it
 from typing import Iterable, Optional, Union, Tuple
+from functools import reduce
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import cooler
+import multiprocessing as mp
 import chromosight.utils.preprocessing as cup
 import chromosight.utils.detection as cud
 import chromosight.utils.io as cio
@@ -21,7 +23,6 @@ import pareidolia.io as pai
 import pareidolia.preprocess as pap
 import pareidolia.detection as pad
 import pareidolia.stats as pas
-import multiprocessing as mp
 
 
 def get_min_contacts(
@@ -38,9 +39,7 @@ def get_min_contacts(
         if region is None:
             contacts[i] = clr.info["sum"]
         else:
-            contacts[i] = (
-                clr.matrix(balance=False, sparse=True).fetch(region).sum()
-            )
+            contacts[i] = clr.matrix(balance=False, sparse=True).fetch(region).sum()
     # Return the minimum coverage value (in number of contacts)
     return int(min(contacts))
 
@@ -122,18 +121,118 @@ def coords_to_bins(clr: cooler.Cooler, coords: pd.DataFrame) -> np.ndarray:
     return idx
 
 
+def make_density_filter(
+    mats: Iterable[sp.csr_matrix],
+    density_thresh: float = 0.25,
+    win_size=3,
+    sym_upper=False,
+) -> sp.csr_matrix:
+    """Given a list of sparse matrices, generate a "density filter". This
+    new sparse matrix is a boolean mask where values indicate whether the
+    proportion of nonzero pixels in the neighbourhood of diameter win_size
+    is above the input threshold in all input matrices.
+
+    Parameters
+    ----------
+    mats : Iterable of scipy.sparse.csr_matrix
+        The matrices to be combined into a filter.
+    density_thresh : float
+        The required proportion of nonzero pixels in the neighbourhood pass
+        the filter.
+    win_size : int
+        The diameter of the neighbourhood in which to compute the proportion
+        of nonzero pixels.
+    sym_upper : bool
+        Whether the matrix is symmetric upper. In this case, computations are
+        performed in the upper triangle.
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix of bools:
+        The sparse boolean mask representing the density filter. Values are
+        True where all input matrices passed the threshold.
+    """
+
+    # Filter out regions where contacts were too sparse in all contact matrices
+    # Pixel density is first converted to a boolean matrix (pass / fail)
+    filters = map(
+        lambda m: pad.get_win_density(m, win_size=win_size, sym_upper=sym_upper)
+        > density_thresh,
+        mats,
+    )
+    # matrices are reduced through an element-wise multiplication acting as an AND
+    # filter: AND(AND(AND(m1, m2), m3), m4)
+    inter_filter = reduce(lambda x, y: x.multiply(y), filters)
+    return inter_filter
+
+
+def _ttest_matrix(samples: pd.DataFrame, control: str) -> Tuple[sp.csr_matrix, float]:
+    """
+    Performs pixel-wise t-test comparisons between conditions to detect differential
+    interactions.
+    """
+    # Compute background for each condition
+    arr_control = np.dstack([m.data for m in samples.mat[samples.cond == control]])[
+        0, :, :
+    ]
+    arr_alt = np.dstack([m.data for m in samples.mat[samples.cond != control]])[0, :, :]
+    diff = samples["mat"][0]
+    diff.data = pas.vec_ttest(arr_control, arr_alt)
+    # The threshold is the t-value corresponding to p=0.05
+    # thresh = pas.pval_to_tval(
+    #    1 - percentile_thresh / 100,
+    #    arr_control.shape[1] + arr_alt.shape[1],
+    # )
+    return diff
+
+
+def _median_bg_subtraction(
+    samples: pd.DataFrame, control: str
+) -> Tuple[sp.csr_matrix, float]:
+    """
+    Performs the median background subtraction to extract differential signal
+    from multiple Hi-C matrix.
+    """
+    # Compute background for each condition
+    backgrounds = samples.groupby("cond")["mat"].apply(
+        lambda g: pad.median_bg(g.reset_index(drop=True))
+    )
+    # Compute sse for each condition
+    sse = samples.groupby("cond")["mat"].apply(
+        lambda g: pad.get_sse_mat(g.reset_index(drop=True))
+    )
+    conditions = np.unique(samples.cond)
+    # Compute difference between conditions and signal
+    # to noise ratio
+    snr = np.zeros(sse[0].data.shape)
+    diff = sp.csr_matrix(sse[0].shape)
+    for c in conditions:
+        snr += backgrounds[c].data / np.sqrt(sse[c].data)
+        if c != control:
+            # Break ties to preserve sparsity (do not introduce 0s)
+            ties = backgrounds[c].data == backgrounds[control].data
+            backgrounds[c].data[ties] += 1e-06
+            diff += backgrounds[c] - backgrounds[control]
+    snr /= len(conditions)
+    # Use average difference to first background as change metric
+    diff.data /= len(conditions) - 1
+    # Threshold data on background / sse value
+    diff.data[snr < 1.0] = 0.0
+    return diff
+
+
 def detection_matrix(
     samples: pd.DataFrame,
     kernel: np.ndarray,
     region: Optional[str] = None,
     subsample: Optional[int] = None,
     max_dist: Optional[int] = None,
-    percentile_thresh: Optional[float] = 95.0,
+    pearson_thresh: Optional[float] = None,
     mode="median",
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
     """
-    Run the detection process for a single matrix. This is abstracted from all
+    Run the detection process for a single chromosome or region. This is abstracted from all
     notions of chromosomes and genomic coordinates.
     """
     # We consider the matrix is symmetric upper (i.e. intrachromosomal)
@@ -167,9 +266,7 @@ def detection_matrix(
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
     # Trim diagonals beyond max_dist to spare resources
-    samples["mat"] = map_fun(
-        cup.diag_trim, zip(samples["mat"], it.repeat(max_dist))
-    )
+    samples["mat"] = map_fun(cup.diag_trim, zip(samples["mat"], it.repeat(max_dist)))
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
@@ -189,6 +286,16 @@ def detection_matrix(
         ),
     )
     print(f"{region} missing bins erased", file=sys.stderr)
+
+    # Compute a density filter: regions with sufficient proportion of nonzero
+    # pixels in kernel windows, in all samples. We will use it for downstream
+    # which filter
+    density_filter = make_density_filter(
+        samples["mat"],
+        density_thresh=0.25,
+        win_size=kernel.shape[0],
+        sym_upper=sym_upper,
+    )
     # Generate correlation maps for all samples using chromosight's algorithm
     corrs = map_fun(
         cud.normxcorr2,
@@ -207,78 +314,34 @@ def detection_matrix(
     samples["mat"] = [tup[0] for tup in corrs]
     del corrs
     print(f"{region} correlation matrices computed", file=sys.stderr)
-
     # Get the union of nonzero coordinates across all samples
     total_nnz_set = pap.get_nnz_union(samples["mat"])
     # Fill zeros at these coordinates
-    samples["mat"] = samples["mat"].apply(
-        lambda cor: pap.fill_nnz(cor, total_nnz_set)
-    )
+    samples["mat"] = samples["mat"].apply(lambda cor: pap.fill_nnz(cor, total_nnz_set))
+
+    # Erase pixels where all samples are below pearson threshold
+    if pearson_thresh is not None:
+        pearson_fail = [(m.data < pearson_thresh).astype(bool) for m in samples["mat"]]
+        pearson_fail = np.bitwise_and.reduce(pearson_fail)
+        # Threshold maps using pearson correlations to reduce noisy detections
+        for i, m in enumerate(samples["mat"]):
+            m.data[pearson_fail] = 0.0
+            samples["mat"][i] = m
+
     if n_cpus > 1:
         pool.close()
-    # Fewer than 3 replicates: use median background
+
+    # Use median background
     if mode == "median":
-        # Compute background for each condition
-        backgrounds = samples.groupby("cond")["mat"].apply(
-            lambda g: pad.median_bg(g.reset_index(drop=True))
-        )
-        # Get the distribution of difference to background within each condition
-        within_diffs = np.hstack(
-            samples.groupby("cond")["mat"].apply(
-                lambda g: pad.reps_bg_diff(g.reset_index(drop=True))
-            )
-        )
-        # Compute sse for each condition
-        sse = samples.groupby("cond")["mat"].apply(
-            lambda g: pad.get_sse_mat(g.reset_index(drop=True))
-        )
-        conditions = np.unique(samples.cond)
-        # Compute difference between conditions and signal
-        # to noise ratio
-        snr = np.zeros(sse[0].data.shape)
-        diff = sp.csr_matrix(sse[0].shape)
-        for c in conditions:
-            snr += backgrounds[c].data / np.sqrt(sse[c].data)
-            if c != control:
-                # Break ties to preserve sparsity (do not introduce 0s)
-                ties = backgrounds[c].data == backgrounds[control].data
-                backgrounds[c].data[ties] += 1e-06
-                diff += backgrounds[c] - backgrounds[control]
-        snr /= len(conditions)
-        # Use average difference to first background as change metric
-        diff.data /= len(conditions) - 1
-        # Threshold data on background / sse value
-        diff.data[snr < 1.5] = 0.0
-        # Apply threshold to differences based on within-condition variations
-        try:
-            if percentile_thresh is None:
-                thresh = None
-            else:
-                thresh = np.percentile(
-                    abs(within_diffs[within_diffs != 0]), percentile_thresh
-                )
-                diff.data[np.abs(diff.data) < thresh] = 0.0
-        # If there is no nonzero value (e.g. very small matrices), return nothing
-        except IndexError:
-            diff = None
-            thresh = None
-    # At least 3 replicates: Use t-test
+        diff = _median_bg_subtraction(samples, control)
+    # Use t-test on each pixel (untested, probably doesn't work well)
     else:
-        # Compute background for each condition
-        arr_control = np.dstack(
-            [m.data for m in samples.mat[samples.cond == control]]
-        )[0, :, :]
-        arr_alt = np.dstack(
-            [m.data for m in samples.mat[samples.cond != control]]
-        )[0, :, :]
-        diff = samples["mat"][0]
-        diff.data = pas.vec_ttest(arr_control, arr_alt)
-        # The threshold is the t-value corresponding to p=0.05
-        thresh = pas.pval_to_tval(
-            1 - percentile_thresh / 100,
-            arr_control.shape[1] + arr_alt.shape[1],
-        )
-    return diff, thresh
+        diff = _ttest_matrix(samples, control)
+
+    # Erase pixels which do not pass the density filter in all samples
+    diff = diff.multiply(density_filter)
+
+    return diff
 
 
 def change_detection_pipeline(
@@ -290,7 +353,7 @@ def change_detection_pipeline(
     max_dist: Optional[int] = None,
     min_dist: Optional[int] = None,
     subsample: bool = True,
-    percentile_thresh: Optional[float] = 95.0,
+    pearson_thresh: Optional[float] = None,
     n_cpus: int = 4,
     mode="median",
 ) -> pd.DataFrame:
@@ -374,8 +437,14 @@ def change_detection_pipeline(
                 max_dist = getattr(ck, kernel_name)["max_dist"]
             if min_dist is None:
                 min_dist = getattr(ck, kernel_name)["min_dist"]
+            if pearson_thresh is None:
+                pearson_thresh = getattr(ck, kernel_name)["pearson"]
         except AttributeError:
             raise AttributeError(f"{kernel_name} is not a valid pattern name")
+        print(f"Loading default parameter for kernel '{kernel_name}'...")
+        print(f"pearson_thresh: {pearson_thresh}")
+        print(f"min_dist: {min_dist}")
+        print(f"max_dist: {max_dist}")
     elif isinstance(kernel, np.ndarray):
         kernel_name = "custom kernel"
     else:
@@ -383,12 +452,8 @@ def change_detection_pipeline(
             "Kernel must either be a valid chromosight pattern name, or a 2D numpy.ndarray of floats"
         )
     # Associate samples with their conditions
-    samples = pd.DataFrame(
-        {"cond": conditions, "cool": pai.get_coolers(cool_files)}
-    )
-    print(
-        f"Changes will be computed relative to condition: {samples.cond.values[0]}"
-    )
+    samples = pd.DataFrame({"cond": conditions, "cool": pai.get_coolers(cool_files)})
+    print(f"Changes will be computed relative to condition: {samples.cond.values[0]}")
     # Define each chromosome as a region, if None specified
     clr = samples.cool.values[0]
     if max_dist is not None:
@@ -421,25 +486,24 @@ def change_detection_pipeline(
     for reg in regions:
         # Subset bins to the range of interest
         bins = clr.bins().fetch(reg).reset_index(drop=True)
-        diff, thresh = detection_matrix(
+        diff = detection_matrix(
             samples,
             kernel,
             region=reg,
             subsample=subsample,
             max_dist=max_dist,
-            percentile_thresh=percentile_thresh,
+            pearson_thresh=pearson_thresh,
             n_cpus=n_cpus,
             mode=mode,
         )
+
         # If the matrix was too small, skip it
-        if thresh is None and percentile_thresh is not None:
+        if diff is None:
             continue
         # If positions were provided, return the change value for each of them
         if bed2d_file:
             tmp_chr = reg.split(":")[0]
-            tmp_rows = (positions.chrom1 == tmp_chr) & (
-                positions.chrom2 == tmp_chr
-            )
+            tmp_rows = (positions.chrom1 == tmp_chr) & (positions.chrom2 == tmp_chr)
             # If there are no positions of interest on this chromosome, just
             # skip it
             if not np.any(tmp_rows):
@@ -448,9 +512,7 @@ def change_detection_pipeline(
             # Convert both coordinates from genomic coords to bins
             for i in [1, 2]:
                 tmp_pos["chrom"] = tmp_pos[f"chrom{i}"]
-                tmp_pos["pos"] = (
-                    tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
-                ) // 2
+                tmp_pos["pos"] = (tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]) // 2
                 tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos).astype(int)
                 # Save bin coordinates from current chromosome to the full table
                 positions.loc[tmp_rows, f"bin{i}"] = tmp_pos[f"bin{i}"]
@@ -462,7 +524,7 @@ def change_detection_pipeline(
         # Otherwise report individual spots of change using chromosight
         else:
             # Pick "foci" of changed pixels and their local maxima
-            tmp_pos, _ = cud.picker(abs(diff), thresh)
+            tmp_pos, _ = cud.pick_foci(abs(diff), 0.01, min_size=3)
             # Get genomic positions from matrix coordinates
             tmp_pos = pd.DataFrame(tmp_pos, columns=["bin1", "bin2"])
             for i in [1, 2]:
