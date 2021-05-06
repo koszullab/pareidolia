@@ -151,8 +151,7 @@ def get_win_density(
         density[frame.row, frame.col].A1 * win_area / frame.data
     )
     # Trim the frame out from the signal
-    rad = win_size // 2 + 1
-    density = density[rad:-rad, rad:-rad]
+    density = density[win_size - 1 : -win_size + 1, win_size - 1 : -win_size + 1]
     if sym_upper:
         density = sp.triu(density)
     return density
