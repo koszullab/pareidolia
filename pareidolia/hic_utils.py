@@ -261,7 +261,7 @@ def detection_matrix(
 
     # Return nothing if the matrix is smaller than kernel
     if np.any(np.array(samples["mat"][0].shape) <= np.array(kernel.shape)):
-        return None, None
+        return None
     # Retrieve the indices of bins which are valid in all samples (not missing
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
@@ -497,8 +497,8 @@ def change_detection_pipeline(
             mode=mode,
         )
 
-        # If the matrix was too small, skip it
-        if diff is None:
+        # If the matrix was too small or no difference was found, skip it
+        if diff is None or diff.nnz == 0:
             continue
         # If positions were provided, return the change value for each of them
         if bed2d_file:
