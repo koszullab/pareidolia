@@ -19,12 +19,12 @@ def median_bg(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
 
     Parameters
     ----------
-    mats : Iterable of sp.spmatrix:
+    mats : Iterable of scipy.sparse.spmatrix:
         A list of data matrices from different samples.
 
     Returns
     -------
-    sp.spmatrix :
+    scipy.sparse.spmatrix :
         The median background matrix, where each pixel is the median of
         the corresponding pixel from all samples.
     """
@@ -49,12 +49,12 @@ def reps_bg_diff(mats: Iterable[sp.spmatrix]) -> np.ndarray:
 
     Parameters
     ----------
-    mats : Iterable of sp.spmatrix
+    mats : Iterable of scipy.sparse.spmatrix
         The list of data matrices from different samples.
 
     Returns
     -------
-    np.ndarray of floats :
+    numpy.ndarray of floats :
         The distribution of pixel differences to the median background. If
         there are S matrices of P nonzero pixels, this 1D array will contain
         P*S elements.
@@ -74,12 +74,12 @@ def get_sse_mat(mats: Iterable[sp.spmatrix]) -> sp.spmatrix:
 
     Parameters
     ----------
-    mats : Iterable of sp.spmatrix
+    mats : Iterable of scipy.sparse.spmatrix
         The list of data matrices from different samples.
 
     Returns
     -------
-    sp.spmatrix :
+    scipy.sparse.spmatrix :
         A sparse matrix where each nonzero pixel is the sum of squared
         difference of all samples to their median background, at the
         corresponding nonzero pixel.
