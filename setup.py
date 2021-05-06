@@ -15,7 +15,7 @@ def read(filename):
 
 setup(
     name="pareidolia",
-    version="0.4.0",
+    version="0.4.1",
     url="https://github.com/cmdoret/pareidolia",
     license='MIT',
     author="Cyril Matthey-Doret",
