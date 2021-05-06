@@ -35,13 +35,11 @@ def test_change_detection():
     """Test if change detection pipeline can run from CLI"""
     # Run loop change detection between matrices with and without loops
     cools = ",".join(COOLS + COOLS_COMP)
-    conds = ",".join(["A"] * len(COOLS) + ["B"] * len(COOLS_COMP))
+    conds = ",".join(["B"] * len(COOLS) + ["S"] * len(COOLS_COMP))
     out_f = tempfile.NamedTemporaryFile(delete=False)
     runner = CliRunner()
     # Default parameters
-    default_result = runner.invoke(
-        pac.pareidolia_cmd, [cools, conds, out_f.name]
-    )
+    default_result = runner.invoke(pac.pareidolia_cmd, [cools, conds, out_f.name])
     assert default_result.exit_code == 0
     # With a bed2d file
     bed2d_result = runner.invoke(

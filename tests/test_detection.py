@@ -22,9 +22,7 @@ def gen_mats(shape, n_mats=4, density=0.8):
     # Get total number of pixels in the matrix
     n_coords = shape[0] * shape[1]
     # Pick a number of (1D) pixel indices to switch on
-    picked_coords = np.random.choice(
-        n_coords, round(density * n_coords), replace=False
-    )
+    picked_coords = np.random.choice(n_coords, round(density * n_coords), replace=False)
     # Convert 1D coords to 2D
     picked_rows = picked_coords // shape[1]
     picked_cols = picked_coords % shape[1]
@@ -67,12 +65,11 @@ def test_median_bg(shape):
 
 @pytest.mark.parametrize(*MAP_PARAMS)
 def test_reps_bg_diff(shape):
-    """Test computation of distribution of differences to median background """
+    """Test computation of distribution of differences to median background"""
     mats = gen_mats(shape)
     obs_diff = pad.reps_bg_diff(mats)
     # Test the number of points in the distribution
     assert obs_diff.shape[0] == len(mats[0].data) * len(mats)
-
 
 
 @pytest.mark.parametrize(*MAP_PARAMS)
@@ -81,7 +78,34 @@ def test_get_sse_mat(shape):
     # Compare with dense equivalent
     mats = gen_mats(shape)
     bg_dense = pad.median_bg(mats).toarray()
-    se_dense = np.array([(m.toarray() - bg_dense)**2 for m in mats])
+    se_dense = np.array([(m.toarray() - bg_dense) ** 2 for m in mats])
     sse_dense = np.sum(se_dense, axis=0)
     sse_sparse = pad.get_sse_mat(mats)
     assert np.all(sse_dense == sse_sparse)
+
+
+@pytest.mark.parametrize(*MAP_PARAMS)
+def test_get_win_density_shape(shape):
+    """Test output shape when computing local pixel density"""
+    mats = gen_mats(shape)
+    for mat in mats:
+        density = pad.get_win_density(mat)
+        # Check if shape is correct
+        assert density.shape == mat.shape
+        # Density cannot be smaller than in input mat
+        assert density.nnz >= mat.nnz
+        # Check if lower triangle is empty when running
+        # in symmetric upper mode
+        density = pad.get_win_density(mat, sym_upper=True)
+        assert density.sum() == sp.triu(density).sum()
+        assert density.shape == mat.shape
+
+
+@pytest.mark.parametrize("density", (0.1, 0.5, 0.8))
+def test_get_win_density_values(density):
+    """Fuzzy test the results of local pixel density"""
+    # Perform local density estimation on a few large matrices
+    mats = gen_mats((1000, 1000), n_mats=5, density=density)
+    obs_density = np.mean([pad.get_win_density(m).mean() for m in mats])
+    # Check if average density match expectations
+    assert abs(obs_density - density) < 0.01
