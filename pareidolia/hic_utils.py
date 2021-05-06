@@ -123,7 +123,7 @@ def coords_to_bins(clr: cooler.Cooler, coords: pd.DataFrame) -> np.ndarray:
 
 def make_density_filter(
     mats: Iterable[sp.csr_matrix],
-    density_thresh: float = 0.25,
+    density_thresh: float = 0.10,
     win_size=3,
     sym_upper=False,
 ) -> sp.csr_matrix:
@@ -228,6 +228,7 @@ def detection_matrix(
     subsample: Optional[int] = None,
     max_dist: Optional[int] = None,
     pearson_thresh: Optional[float] = None,
+    density_thresh: Optional[float] = None,
     mode="median",
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
@@ -290,12 +291,13 @@ def detection_matrix(
     # Compute a density filter: regions with sufficient proportion of nonzero
     # pixels in kernel windows, in all samples. We will use it for downstream
     # which filter
-    density_filter = make_density_filter(
-        samples["mat"],
-        density_thresh=0.25,
-        win_size=kernel.shape[0],
-        sym_upper=sym_upper,
-    )
+    if density_thresh is not None:
+        density_filter = make_density_filter(
+            samples["mat"],
+            density_thresh=density_thresh,
+            win_size=kernel.shape[0],
+            sym_upper=sym_upper,
+        )
     # Generate correlation maps for all samples using chromosight's algorithm
     corrs = map_fun(
         cud.normxcorr2,
@@ -339,7 +341,8 @@ def detection_matrix(
         diff = _ttest_matrix(samples, control)
 
     # Erase pixels which do not pass the density filter in all samples
-    diff = diff.multiply(density_filter)
+    if density_thresh is not None:
+        diff = diff.multiply(density_filter)
 
     return diff
 
@@ -354,6 +357,7 @@ def change_detection_pipeline(
     min_dist: Optional[int] = None,
     subsample: bool = True,
     pearson_thresh: Optional[float] = None,
+    density_thresh: float = 0.10,
     n_cpus: int = 4,
     mode="median",
 ) -> pd.DataFrame:
@@ -402,8 +406,12 @@ def change_detection_pipeline(
     subsample : bool
         Whether all input matrices should be subsampled to the same number of
         contacts as the least covered sample.
-    percentile_thresh : float or None
-        The significance threshold to use when detecting changes.
+    pearson_thresh: float or None
+        The pearson correlation threshold to use when detecting patterns. If None,
+        the default value for the kernel is used.
+    density_thresh: float
+        The pixel density threshold to require. Low coverage windows with a
+        proportion of nonzero pixels below this value are discarded.
     n_cpus : int
         Number of CPU cores to allocate for parallel operations.
     mode : str
@@ -493,6 +501,7 @@ def change_detection_pipeline(
             subsample=subsample,
             max_dist=max_dist,
             pearson_thresh=pearson_thresh,
+            density_thresh=density_thresh,
             n_cpus=n_cpus,
             mode=mode,
         )
@@ -542,7 +551,11 @@ def change_detection_pipeline(
                 # Add axis' columns to  dataframe
                 tmp_pos = pd.concat([coords, tmp_pos], axis=1)
             # Retrieve diff values for each coordinate
-            tmp_pos["diff_score"] = diff[tmp_pos.bin1, tmp_pos.bin2].A1
+            try:
+                tmp_pos["diff_score"] = diff[tmp_pos.bin1, tmp_pos.bin2].A1
+            # No position found, go to next region
+            except AttributeError:
+                continue
             # Append new chromosome's rows
             positions = pd.concat([positions, tmp_pos], axis=0)
     positions = positions.loc[:, pos_cols]

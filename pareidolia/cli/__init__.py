@@ -74,6 +74,18 @@ from .. import __version__
     type=float,
 )
 @click.option(
+    "--density",
+    "-D",
+    default=0.10,
+    show_default=True,
+    help=(
+        "Minimum proportion of nonzero pixels to consider a region. "
+        "Smaller values allows lower coverage regions, but "
+        "increase false positives."
+    ),
+    type=float,
+)
+@click.option(
     "--no-subsample",
     "-s",
     default=False,
@@ -101,6 +113,7 @@ def pareidolia_cmd(
     max_dist,
     no_subsample,
     pearson,
+    density,
     mode,
     n_cpus,
 ):
@@ -132,6 +145,7 @@ def pareidolia_cmd(
         max_dist=max_dist,
         subsample=not no_subsample,
         pearson_thresh=pearson,
+        density_thresh=density,
         n_cpus=n_cpus,
         mode=mode,
     )
