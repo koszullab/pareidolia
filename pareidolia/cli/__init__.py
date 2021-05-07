@@ -88,8 +88,7 @@ from .. import __version__
 @click.option(
     "--no-subsample",
     "-s",
-    default=False,
-    show_default=False,
+    is_flag=True,
     help="Disable subsampling of input matrices to the same coverage.",
 )
 @click.option(
