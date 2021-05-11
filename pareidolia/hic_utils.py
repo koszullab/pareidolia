@@ -259,21 +259,23 @@ def detection_matrix(
         zip(samples.cool, it.repeat(min_contacts), it.repeat(region)),
     )
     print(f"{region} preprocessed", file=sys.stderr)
-
     # Return nothing if the matrix is smaller than kernel
     if np.any(np.array(samples["mat"][0].shape) <= np.array(kernel.shape)):
         return None
     # Retrieve the indices of bins which are valid in all samples (not missing
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
-    # Trim diagonals beyond max_dist to spare resources
-    samples["mat"] = map_fun(cup.diag_trim, zip(samples["mat"], it.repeat(max_dist)))
+    # Trim diagonals beyond max_dist (with kernel margin for the convolution)
+    # to spare resources
+    samples["mat"] = map_fun(
+        cup.diag_trim, zip(samples["mat"], it.repeat(max_dist + max(kernel.shape)))
+    )
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
         common_bins,
         common_bins,
-        max_dist=max_dist,
+        max_dist=max_dist + max(kernel.shape),
         sym_upper=sym_upper,
     )
     # Remove all missing values form each sample's matrix
@@ -343,6 +345,9 @@ def detection_matrix(
     # Erase pixels which do not pass the density filter in all samples
     if density_thresh is not None:
         diff = diff.multiply(density_filter)
+    # Remove all values beyond user-specified max_dist
+    if max_dist is not None:
+        diff = cup.diag_trim(diff, max_dist + 2)
 
     return diff
 
@@ -558,6 +563,11 @@ def change_detection_pipeline(
                 continue
             # Append new chromosome's rows
             positions = pd.concat([positions, tmp_pos], axis=0)
+            # For 1D patterns (e.g. borders) set diagonal positions.
+            if max_dist == 0:
+                positions[["bin1", "chrom1", "start1", "end1"]] = positions[
+                    ["bin2", "chrom2", "start2", "end2"]
+                ]
     positions = positions.loc[:, pos_cols]
     positions = positions.loc[
         abs(positions.bin2 - positions.bin1) >= min_dist, :
