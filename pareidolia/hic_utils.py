@@ -238,6 +238,11 @@ def detection_matrix(
     """
     # We consider the matrix is symmetric upper (i.e. intrachromosomal)
     sym_upper = True
+    # Diagonals will be trimmed at max_dist with a margin for convolution
+    if max_dist is None:
+        trim_dist = None
+    else:
+        trim_dist = max_dist + max(kernel.shape)
     # Compute number of contacts in the matrix with the lowest coverage
     if subsample:
         min_contacts = get_min_contacts(samples.cool, region=region)
@@ -268,14 +273,14 @@ def detection_matrix(
     # Trim diagonals beyond max_dist (with kernel margin for the convolution)
     # to spare resources
     samples["mat"] = map_fun(
-        cup.diag_trim, zip(samples["mat"], it.repeat(max_dist + max(kernel.shape)))
+        cup.diag_trim, zip(samples["mat"], it.repeat(trim_dist))
     )
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
         common_bins,
         common_bins,
-        max_dist=max_dist + max(kernel.shape),
+        max_dist=trim_dist,
         sym_upper=sym_upper,
     )
     # Remove all missing values form each sample's matrix
@@ -471,7 +476,9 @@ def change_detection_pipeline(
     clr = samples.cool.values[0]
     if max_dist is not None:
         max_dist = max_dist // clr.binsize
-    if min_dist is not None:
+    if min_dist is None:
+        min_dist = 0
+    else:
         min_dist = min_dist // clr.binsize
     if region is None:
         regions = clr.chroms()[:]["name"].tolist()
@@ -572,6 +579,5 @@ def change_detection_pipeline(
     positions = positions.loc[
         abs(positions.bin2 - positions.bin1) >= min_dist, :
     ].reset_index(drop=True)
-    print(min_dist)
     print(positions)
     return positions
