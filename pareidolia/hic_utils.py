@@ -298,7 +298,7 @@ def detection_matrix(
     # Compute a density filter: regions with sufficient proportion of nonzero
     # pixels in kernel windows, in all samples. We will use it for downstream
     # which filter
-    if density_thresh is not None:
+    if (density_thresh is not None) and (density_thresh > 0):
         density_filter = make_density_filter(
             samples["mat"],
             density_thresh=density_thresh,
@@ -348,7 +348,7 @@ def detection_matrix(
         diff = _ttest_matrix(samples, control)
 
     # Erase pixels which do not pass the density filter in all samples
-    if density_thresh is not None:
+    if (density_thresh is not None) and (density_thresh > 0):
         diff = diff.multiply(density_filter)
     # Remove all values beyond user-specified max_dist
     if max_dist is not None:
@@ -367,7 +367,7 @@ def change_detection_pipeline(
     min_dist: Optional[int] = None,
     subsample: bool = True,
     pearson_thresh: Optional[float] = None,
-    density_thresh: float = 0.10,
+    density_thresh: Optional[float] = 0.10,
     n_cpus: int = 4,
     mode="median",
 ) -> pd.DataFrame:
@@ -419,7 +419,7 @@ def change_detection_pipeline(
     pearson_thresh: float or None
         The pearson correlation threshold to use when detecting patterns. If None,
         the default value for the kernel is used.
-    density_thresh: float
+    density_thresh: float or None
         The pixel density threshold to require. Low coverage windows with a
         proportion of nonzero pixels below this value are discarded.
     n_cpus : int
