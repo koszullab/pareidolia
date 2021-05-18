@@ -27,11 +27,10 @@ Pareidolia can be used both as a python package and as a command line tool:
 .. code-block:: python
 
   import pareidolia.hic_utils as pah
-  import chromosight.kernels as ck
   pah.change_detection_pipeline(
     ["ctrl1.cool", "ctrl2.cool", "treat1.cool", "treat2.cool"],
     ["control", "control", "treatment", "treatment"],
-    kernel=ck.loops,
+    kernel='loops',
     subsample=True,
     n_cpus=8,
   )
