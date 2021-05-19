@@ -188,7 +188,7 @@ def _ttest_matrix(samples: pd.DataFrame, control: str) -> Tuple[sp.csr_matrix, f
 
 def _median_bg_subtraction(
     samples: pd.DataFrame, control: str
-) -> Tuple[sp.csr_matrix, float]:
+    , snr_thresh: float=1.0) -> Tuple[sp.csr_matrix, float]:
     """
     Performs the median background subtraction to extract differential signal
     from multiple Hi-C matrix.
@@ -211,13 +211,13 @@ def _median_bg_subtraction(
         if c != control:
             # Break ties to preserve sparsity (do not introduce 0s)
             ties = backgrounds[c].data == backgrounds[control].data
-            backgrounds[c].data[ties] += 1e-06
+            backgrounds[c].data[ties] += 1e-08
             diff += backgrounds[c] - backgrounds[control]
     snr /= len(conditions)
     # Use average difference to first background as change metric
     diff.data /= len(conditions) - 1
     # Threshold data on background / sse value
-    diff.data[snr < 1.0] = 0.0
+    diff.data[snr < snr_thresh] = 0.0
     return diff
 
 
@@ -229,7 +229,8 @@ def detection_matrix(
     max_dist: Optional[int] = None,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = None,
-    mode="median",
+    mode: str="median",
+    snr_thresh: float=1.0,
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
     """
@@ -342,7 +343,7 @@ def detection_matrix(
 
     # Use median background
     if mode == "median":
-        diff = _median_bg_subtraction(samples, control)
+        diff = _median_bg_subtraction(samples, control, snr_thresh)
     # Use t-test on each pixel (untested, probably doesn't work well)
     else:
         diff = _ttest_matrix(samples, control)
@@ -370,6 +371,7 @@ def change_detection_pipeline(
     density_thresh: Optional[float] = 0.10,
     n_cpus: int = 4,
     mode="median",
+    snr_thresh: float=1.0,
 ) -> pd.DataFrame:
     """
     Run end to end pattern change detection pipeline on input cool files. A
@@ -515,6 +517,7 @@ def change_detection_pipeline(
             pearson_thresh=pearson_thresh,
             density_thresh=density_thresh,
             n_cpus=n_cpus,
+            snr_thresh=snr_thresh,
             mode=mode,
         )
 
