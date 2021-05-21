@@ -70,7 +70,10 @@ from .. import __version__
     "-p",
     default=None,
     show_default=True,
-    help=("Threshold to apply when detecting pattern changes."),
+    help=(
+        "Threshold to apply when detecting pattern changes. "
+        "A default value is selected based on the kernel."
+    ),
     type=float,
 )
 @click.option(
@@ -79,24 +82,48 @@ from .. import __version__
     default=0.10,
     show_default=True,
     help=(
-        "Minimum proportion of nonzero pixels to consider a region. "
+        "Minimum proportion of nonzero pixels required to consider a region. "
         "Smaller values allows lower coverage regions, but "
         "increase false positives."
     ),
     type=float,
 )
 @click.option(
-    "--no-subsample",
+    "--snr",
     "-s",
+    default=1.0,
+    show_default=True,
+    help=(
+        "Signal-to-noise-ratio threshold used to filter out positions with "
+        "high technical variations relative to biological variations."
+    ),
+    type=float,
+)
+@click.option(
+    "--no-subsample",
+    "-S",
     is_flag=True,
     help="Disable subsampling of input matrices to the same coverage.",
+)
+@click.option(
+    "--no-filter",
+    "-F",
+    is_flag=True,
+    help=(
+        "Completely disable pearson, snr and density filtering. Mostly "
+        "for debugging. All input positions are returned, but results "
+        "will be noisy."
+    ),
 )
 @click.option(
     "--n-cpus",
     "-n",
     default=1,
     show_default=False,
-    help="Number of CPUs to use for parallel tasks",
+    help=(
+        "Number of CPUs to use for parallel tasks. It is recommended to set "
+        "at most to the number of input samples."
+    ),
 )
 @click.argument("cool_files", type=str)
 @click.argument("conditions", type=str)
@@ -111,8 +138,10 @@ def pareidolia_cmd(
     region,
     max_dist,
     no_subsample,
+    no_filter,
     pearson,
     density,
+    snr,
     mode,
     n_cpus,
 ):
@@ -130,6 +159,10 @@ def pareidolia_cmd(
                 "kernel must either be a valid kernel name or path to a"
                 " text file (see --help)."
             )
+    # Disable all filters if requested
+    if no_filter:
+        snr = density = None
+        pearson = 0.0
     # Get lists from comma-separated items
     cool_files = _parse_cli_list(cool_files)
     conditions = _parse_cli_list(conditions)
@@ -145,6 +178,7 @@ def pareidolia_cmd(
         subsample=not no_subsample,
         pearson_thresh=pearson,
         density_thresh=density,
+        snr_thresh=snr,
         n_cpus=n_cpus,
         mode=mode,
     )

@@ -188,7 +188,7 @@ def _ttest_matrix(samples: pd.DataFrame, control: str) -> Tuple[sp.csr_matrix, f
 
 def _median_bg_subtraction(
     samples: pd.DataFrame, control: str
-    , snr_thresh: float=1.0) -> Tuple[sp.csr_matrix, float]:
+    , snr_thresh: Optional[float]=1.0) -> Tuple[sp.csr_matrix, float]:
     """
     Performs the median background subtraction to extract differential signal
     from multiple Hi-C matrix.
@@ -207,7 +207,8 @@ def _median_bg_subtraction(
     snr = np.zeros(sse[0].data.shape)
     diff = sp.csr_matrix(sse[0].shape)
     for c in conditions:
-        snr += backgrounds[c].data / np.sqrt(sse[c].data)
+        if snr_thresh is not None:
+            snr += backgrounds[c].data / np.sqrt(sse[c].data)
         if c != control:
             # Break ties to preserve sparsity (do not introduce 0s)
             ties = backgrounds[c].data == backgrounds[control].data
@@ -217,7 +218,8 @@ def _median_bg_subtraction(
     # Use average difference to first background as change metric
     diff.data /= len(conditions) - 1
     # Threshold data on background / sse value
-    diff.data[snr < snr_thresh] = 0.0
+    if snr_thresh is not None:
+        diff.data[snr < snr_thresh] = 0.0
     return diff
 
 
@@ -229,8 +231,8 @@ def detection_matrix(
     max_dist: Optional[int] = None,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = None,
+    snr_thresh: Optional[float]=1.0,
     mode: str="median",
-    snr_thresh: float=1.0,
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
     """
@@ -369,9 +371,9 @@ def change_detection_pipeline(
     subsample: bool = True,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = 0.10,
+    snr_thresh: Optional[float]=1.0,
     n_cpus: int = 4,
     mode="median",
-    snr_thresh: float=1.0,
 ) -> pd.DataFrame:
     """
     Run end to end pattern change detection pipeline on input cool files. A
