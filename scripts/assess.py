@@ -23,7 +23,6 @@ obs_pos = pah.change_detection_pipeline(
     conds,
     min_dist=50000,
     subsample=False,
-    mode="median",
 )
 # Build a set of fuzzy (+/3 pixels around) positions found
 fuzzy_obs = set()
@@ -55,9 +54,7 @@ fig, ax = plt.subplots(1, 2, sharex=True, sharey=True)
 ax[0].imshow(
     np.log(cooler.Cooler(COOLS_COMP[0]).matrix(balance=True)[:]), cmap="afmhot_r"
 )
-ax[1].imshow(
-    np.log(cooler.Cooler(COOLS[0]).matrix(balance=True)[:]), cmap="afmhot_r"
-)
+ax[1].imshow(np.log(cooler.Cooler(COOLS[0]).matrix(balance=True)[:]), cmap="afmhot_r")
 ax[1].scatter(obs_pos.bin1, obs_pos.bin2, c="r")
 ax[1].scatter([c[0] for c in LOOPS], [c[1] for c in LOOPS], c="g", marker="x")
 plt.show()
