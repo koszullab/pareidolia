@@ -52,6 +52,23 @@ This file can be provided with the `--bed2d-file` option on the CLI, or using th
 Padeidolia accepts chromosight kernels as kernel names. A list of valid kernels can be displayed using `chromosight list-kernels`.
 Alternatively, when using the API, an arbitrary 2D numpy array can be provided as kernels.
 
+
+Algorithm
+---------
+
+Pareidolia starts by running Chromosight's convolution algorithm on each sample provided to compute a correlation coefficient to the target pattern at each position of thi Hi-C matrix.
+
+It then applies a series of filtering steps to discard noisy regions.
+Three filters are applied, each with their respective threshold:
+
+* Pearson threshold: Only regions where at least one input sample has a pearson coefficient above this threshold are considered.
+* snr threshold: Signal-to-noise-ratio filter to discard regions where the intra-condition variability is low compared to the inter-condition difference.
+* Density threshold: Coverage-based filter to remove very sparse regions. If the proportion of non-empty pixels used to compute the correlation score is below that threshold, the value is discarded.
+
+Each filter can be selectively disabled using command line options or adapted.
+
+.. image:: docs/img/pareidolia_process.png
+
 Installation
 ------------
 
