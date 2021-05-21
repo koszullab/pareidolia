@@ -187,11 +187,12 @@ def _ttest_matrix(samples: pd.DataFrame, control: str) -> Tuple[sp.csr_matrix, f
 
 
 def _median_bg_subtraction(
-    samples: pd.DataFrame, control: str
-    , snr_thresh: Optional[float]=1.0) -> Tuple[sp.csr_matrix, float]:
+    samples: pd.DataFrame, control: str, snr_thresh: Optional[float] = 1.0
+) -> Tuple[sp.csr_matrix, sp.csr_matrix]:
     """
     Performs the median background subtraction to extract differential signal
-    from multiple Hi-C matrix.
+    from multiple Hi-C matrix. Returns the filtered differential matrix and
+    the signal-to-noise-ratio matrix used for the filtering.
     """
     # Compute background for each condition
     backgrounds = samples.groupby("cond")["mat"].apply(
@@ -204,23 +205,24 @@ def _median_bg_subtraction(
     conditions = np.unique(samples.cond)
     # Compute difference between conditions and signal
     # to noise ratio
-    snr = np.zeros(sse[0].data.shape)
+    snr = sse[0].copy()
+    snr.data = np.zeros(sse[0].data.shape)
     diff = sp.csr_matrix(sse[0].shape)
     for c in conditions:
         if snr_thresh is not None:
-            snr += backgrounds[c].data / np.sqrt(sse[c].data)
+            snr.data += backgrounds[c].data / np.sqrt(sse[c].data)
         if c != control:
             # Break ties to preserve sparsity (do not introduce 0s)
             ties = backgrounds[c].data == backgrounds[control].data
             backgrounds[c].data[ties] += 1e-08
             diff += backgrounds[c] - backgrounds[control]
-    snr /= len(conditions)
+    snr.data /= len(conditions)
     # Use average difference to first background as change metric
     diff.data /= len(conditions) - 1
     # Threshold data on background / sse value
     if snr_thresh is not None:
-        diff.data[snr < snr_thresh] = 0.0
-    return diff
+        diff.data[snr.data < snr_thresh] = 0.0
+    return diff, snr
 
 
 def detection_matrix(
@@ -231,10 +233,9 @@ def detection_matrix(
     max_dist: Optional[int] = None,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = None,
-    snr_thresh: Optional[float]=1.0,
-    mode: str="median",
+    snr_thresh: Optional[float] = 1.0,
     n_cpus: int = 4,
-) -> Tuple[Optional[sp.csr_matrix], Optional[float]]:
+) -> Tuple[Optional[sp.csr_matrix], Optional[sp.csr_matrix]]:
     """
     Run the detection process for a single chromosome or region. This is abstracted from all
     notions of chromosomes and genomic coordinates.
@@ -269,15 +270,13 @@ def detection_matrix(
     print(f"{region} preprocessed", file=sys.stderr)
     # Return nothing if the matrix is smaller than kernel
     if np.any(np.array(samples["mat"][0].shape) <= np.array(kernel.shape)):
-        return None
+        return None, None
     # Retrieve the indices of bins which are valid in all samples (not missing
     # because of repeated sequences or low coverage)
     common_bins = pap.get_common_valid_bins(samples["mat"])
     # Trim diagonals beyond max_dist (with kernel margin for the convolution)
     # to spare resources
-    samples["mat"] = map_fun(
-        cup.diag_trim, zip(samples["mat"], it.repeat(trim_dist))
-    )
+    samples["mat"] = map_fun(cup.diag_trim, zip(samples["mat"], it.repeat(trim_dist)))
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
@@ -344,11 +343,7 @@ def detection_matrix(
         pool.close()
 
     # Use median background
-    if mode == "median":
-        diff = _median_bg_subtraction(samples, control, snr_thresh)
-    # Use t-test on each pixel (untested, probably doesn't work well)
-    else:
-        diff = _ttest_matrix(samples, control)
+    diff, snr = _median_bg_subtraction(samples, control, snr_thresh)
 
     # Erase pixels which do not pass the density filter in all samples
     if (density_thresh is not None) and (density_thresh > 0):
@@ -357,7 +352,7 @@ def detection_matrix(
     if max_dist is not None:
         diff = cup.diag_trim(diff, max_dist + 2)
 
-    return diff
+    return diff, snr
 
 
 def change_detection_pipeline(
@@ -371,9 +366,8 @@ def change_detection_pipeline(
     subsample: bool = True,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = 0.10,
-    snr_thresh: Optional[float]=1.0,
+    snr_thresh: Optional[float] = 1.0,
     n_cpus: int = 4,
-    mode="median",
 ) -> pd.DataFrame:
     """
     Run end to end pattern change detection pipeline on input cool files. A
@@ -428,10 +422,6 @@ def change_detection_pipeline(
         proportion of nonzero pixels below this value are discarded.
     n_cpus : int
         Number of CPU cores to allocate for parallel operations.
-    mode : str
-        Algorithm used for change detection. Can be median or stat. Median is
-        the default, stat is experimental and should only be used with at least
-        3 samples per condition.
 
     Returns
     -------
@@ -442,12 +432,6 @@ def change_detection_pipeline(
     if len(cool_files) != len(conditions):
         raise ValueError(
             "The lists of cool files and conditions must have the same length"
-        )
-
-    if mode != "median":
-        print(
-            "Running in t-test mode, t-values will be used as diff scores.",
-            file=sys.stderr,
         )
 
     # If a pattern name was provided, load corresponding chromosight kernel
@@ -500,17 +484,18 @@ def change_detection_pipeline(
         "bin1",
         "bin2",
         "diff_score",
+        "snr",
     ]
     if bed2d_file:
         positions = cio.load_bed2d(bed2d_file)
-        for col in ["diff_score", "bin1", "bin2"]:
+        for col in ["diff_score", "snr", "bin1", "bin2"]:
             positions[col] = np.nan
     else:
         positions = pd.DataFrame(columns=pos_cols)
     for reg in regions:
         # Subset bins to the range of interest
         bins = clr.bins().fetch(reg).reset_index(drop=True)
-        diff = detection_matrix(
+        diff, snr = detection_matrix(
             samples,
             kernel,
             region=reg,
@@ -520,7 +505,6 @@ def change_detection_pipeline(
             density_thresh=density_thresh,
             n_cpus=n_cpus,
             snr_thresh=snr_thresh,
-            mode=mode,
         )
 
         # If the matrix was too small or no difference was found, skip it
@@ -545,6 +529,9 @@ def change_detection_pipeline(
             tmp_pos = tmp_pos.drop(columns=["pos", "chrom"])
             # Retrieve diff values for each coordinate
             positions.loc[tmp_rows, "diff_score"] = diff[
+                tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize
+            ].A1
+            positions.loc[tmp_rows, "snr"] = snr[
                 tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize
             ].A1
         # Otherwise report individual spots of change using chromosight
@@ -573,6 +560,7 @@ def change_detection_pipeline(
             # No position found, go to next region
             except AttributeError:
                 continue
+            tmp_pos["snr"] = snr[tmp_pos.bin1, tmp_pos.bin2].A1
             # Append new chromosome's rows
             positions = pd.concat([positions, tmp_pos], axis=0)
             # For 1D patterns (e.g. borders) set diagonal positions.

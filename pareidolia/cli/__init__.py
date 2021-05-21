@@ -56,16 +56,6 @@ from .. import __version__
     type=int,
 )
 @click.option(
-    "--mode",
-    "-d",
-    default="median",
-    show_default=True,
-    help=(
-        "Statistical method to use for detection. 'median' for median"
-        " background filter, stat for t-test."
-    ),
-)
-@click.option(
     "--pearson",
     "-p",
     default=None,
@@ -142,7 +132,6 @@ def pareidolia_cmd(
     pearson,
     density,
     snr,
-    mode,
     n_cpus,
 ):
     """Run the pattern change detection pipeline"""
@@ -180,7 +169,6 @@ def pareidolia_cmd(
         density_thresh=density,
         snr_thresh=snr,
         n_cpus=n_cpus,
-        mode=mode,
     )
 
     # Save results to text file

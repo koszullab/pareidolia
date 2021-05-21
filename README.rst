@@ -19,6 +19,15 @@ It can be used to compare samples from different conditions and use multiple rep
 
 This toolkit exploits `Chromosight <https://github.com/koszullab/chromosight>`_ correlation maps, allowing the same method to detect changes in different Hi-C patterns (e.g. loops or borders).
 
+Installation
+------------
+
+Pareidolia is available on Pypi and can be installed using:
+
+.. code:: bash
+
+  pip3 install --user pareidolia
+
 Usage
 -----
 
@@ -69,14 +78,5 @@ Each filter can be selectively disabled, or its threshold adapted using command 
 If a list of positions was provided, the filtered differential scores are returned at those positions. Otherwise, de-novo differential pattern detection is performed using connected component labelling on the matrix as in Chromosight.
 
 .. image:: docs/img/pareidolia_process.png
-
-Installation
-------------
-
-Pareidolia is available on Pypi and can be installed using:
-
-.. code:: bash
-
-  pip3 install --user pareidolia
 
 
