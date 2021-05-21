@@ -187,7 +187,10 @@ def _ttest_matrix(samples: pd.DataFrame, control: str) -> Tuple[sp.csr_matrix, f
 
 
 def _median_bg_subtraction(
-    samples: pd.DataFrame, control: str, snr_thresh: Optional[float] = 1.0
+    samples: pd.DataFrame,
+    control: str,
+    snr_thresh: Optional[float] = 1.0,
+    snr_max: float = 10.0,
 ) -> Tuple[sp.csr_matrix, sp.csr_matrix]:
     """
     Performs the median background subtraction to extract differential signal
@@ -217,6 +220,9 @@ def _median_bg_subtraction(
             backgrounds[c].data[ties] += 1e-08
             diff += backgrounds[c] - backgrounds[control]
     snr.data /= len(conditions)
+    # Erase spurious or extreme values
+    snr.data[snr.data < 0.0] = 0.0
+    snr.data[snr.data > snr_max] = snr_max
     # Use average difference to first background as change metric
     diff.data /= len(conditions) - 1
     # Threshold data on background / sse value
