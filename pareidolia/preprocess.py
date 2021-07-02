@@ -11,8 +11,7 @@ import chromosight.utils.preprocessing as cup
 
 
 def get_common_valid_bins(
-    mats: Iterable["sp.csr_matrix[float]"],
-    n_mads: float = 5,
+    mats: Iterable["sp.csr_matrix[float]"], n_mads: float = 5,
 ) -> "np.ndarray[int]":
     """
     Generates an array of valid bins indices, using the intersection
@@ -74,10 +73,10 @@ def get_nnz_union(mats: Iterable["sp.csr_matrix[float]"]) -> "np.ndarray[int]":
             for i, mat in enumerate(mats):
                 # Use first matrix to initialize set
                 if i == 0:
-                    union_mat = mat.copy()
+                    union_mat = mat.copy().astype(bool, copy=True)
                 # Iteratively sum matrices
                 else:
-                    union_mat += mat
+                    union_mat += mat.astype(bool, copy=True)
                 union_mat.eliminate_zeros()
             # Retrieve positions of nonzero entries into an array
             all_nnz = np.ascontiguousarray(np.vstack(union_mat.nonzero()).T)
