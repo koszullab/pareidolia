@@ -10,6 +10,12 @@ Welcome to pareidolia's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+Tutorial
+========
+.. toctree::
+    :maxdepth: 3
+
+    TUTORIAL
 
 Reference API
 =============
