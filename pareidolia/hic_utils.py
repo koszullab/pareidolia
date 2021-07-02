@@ -39,7 +39,9 @@ def get_min_contacts(
         if region is None:
             contacts[i] = clr.info["sum"]
         else:
-            contacts[i] = clr.matrix(balance=False, sparse=True).fetch(region).sum()
+            contacts[i] = (
+                clr.matrix(balance=False, sparse=True).fetch(region).sum()
+            )
     # Return the minimum coverage value (in number of contacts)
     return int(min(contacts))
 
@@ -156,7 +158,9 @@ def make_density_filter(
     # Filter out regions where contacts were too sparse in all contact matrices
     # Pixel density is first converted to a boolean matrix (pass / fail)
     filters = map(
-        lambda m: pad.get_win_density(m, win_size=win_size, sym_upper=sym_upper)
+        lambda m: pad.get_win_density(
+            m, win_size=win_size, sym_upper=sym_upper
+        )
         > density_thresh,
         mats,
     )
@@ -166,16 +170,20 @@ def make_density_filter(
     return inter_filter
 
 
-def _ttest_matrix(samples: pd.DataFrame, control: str) -> Tuple[sp.csr_matrix, float]:
+def _ttest_matrix(
+    samples: pd.DataFrame, control: str
+) -> Tuple[sp.csr_matrix, float]:
     """
     Performs pixel-wise t-test comparisons between conditions to detect differential
     interactions.
     """
     # Compute background for each condition
-    arr_control = np.dstack([m.data for m in samples.mat[samples.cond == control]])[
-        0, :, :
-    ]
-    arr_alt = np.dstack([m.data for m in samples.mat[samples.cond != control]])[0, :, :]
+    arr_control = np.dstack(
+        [m.data for m in samples.mat[samples.cond == control]]
+    )[0, :, :]
+    arr_alt = np.dstack(
+        [m.data for m in samples.mat[samples.cond != control]]
+    )[0, :, :]
     diff = samples["mat"][0]
     diff.data = pas.vec_ttest(arr_control, arr_alt)
     # The threshold is the t-value corresponding to p=0.05
@@ -282,7 +290,9 @@ def detection_matrix(
     common_bins = pap.get_common_valid_bins(samples["mat"])
     # Trim diagonals beyond max_dist (with kernel margin for the convolution)
     # to spare resources
-    samples["mat"] = map_fun(cup.diag_trim, zip(samples["mat"], it.repeat(trim_dist)))
+    samples["mat"] = map_fun(
+        cup.diag_trim, zip(samples["mat"], it.repeat(trim_dist))
+    )
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
@@ -334,11 +344,15 @@ def detection_matrix(
     # Get the union of nonzero coordinates across all samples
     total_nnz_set = pap.get_nnz_union(samples["mat"])
     # Fill zeros at these coordinates
-    samples["mat"] = samples["mat"].apply(lambda cor: pap.fill_nnz(cor, total_nnz_set))
+    samples["mat"] = samples["mat"].apply(
+        lambda cor: pap.fill_nnz(cor, total_nnz_set)
+    )
 
     # Erase pixels where all samples are below pearson threshold
     if pearson_thresh is not None:
-        pearson_fail = [(m.data < pearson_thresh).astype(bool) for m in samples["mat"]]
+        pearson_fail = [
+            (m.data < pearson_thresh).astype(bool) for m in samples["mat"]
+        ]
         pearson_fail = np.bitwise_and.reduce(pearson_fail)
         # Threshold maps using pearson correlations to reduce noisy detections
         for i, m in enumerate(samples["mat"]):
@@ -398,35 +412,35 @@ def change_detection_pipeline(
 
     Parameters
     ----------
-    cool_files : Iterable of strs
+    cool_files :
         The list of paths to cool files for the input samples.
-    conditions : Iterable of strs
+    conditions :
         The list of conditions matching the samples.
-    kernel : np.array of floats or str
+    kernel :
         Either the kernel to use as pattern as a numpy array, or the name of a
         valid chromosight pattern.
-    bed2d_file : str or None
+    bed2d_file :
         Path to a bed2D file containing a list of 2D positions. If this is
         provided, pattern changes at these coordinates will be quantified.
         Otherwise, they will be detected based on a threshold.
-    region : str or iterable of strs
+    region :
         Either a single UCSC format region string, or a list of multiple
         regions. The analysis will be restricted to those regions.
-    max_dist : int or None
+    max_dist :
         Maximum interaction distance (in basepairs) to consider in the analysis.
         If this is not specified and a chromosight kernel was specified, the
         default max_dist for that kernel is used. If the case of a custom kernel,
         the whole matrix will be scanned if no max_dist is specified.
-    subsample : bool
+    subsample :
         Whether all input matrices should be subsampled to the same number of
         contacts as the least covered sample.
-    pearson_thresh: float or None
+    pearson_thresh :
         The pearson correlation threshold to use when detecting patterns. If None,
         the default value for the kernel is used.
-    density_thresh: float or None
+    density_thresh :
         The pixel density threshold to require. Low coverage windows with a
         proportion of nonzero pixels below this value are discarded.
-    n_cpus : int
+    n_cpus :
         Number of CPU cores to allocate for parallel operations.
 
     Returns
@@ -464,8 +478,12 @@ def change_detection_pipeline(
             "Kernel must either be a valid chromosight pattern name, or a 2D numpy.ndarray of floats"
         )
     # Associate samples with their conditions
-    samples = pd.DataFrame({"cond": conditions, "cool": pai.get_coolers(cool_files)})
-    print(f"Changes will be computed relative to condition: {samples.cond.values[0]}")
+    samples = pd.DataFrame(
+        {"cond": conditions, "cool": pai.get_coolers(cool_files)}
+    )
+    print(
+        f"Changes will be computed relative to condition: {samples.cond.values[0]}"
+    )
     # Define each chromosome as a region, if None specified
     clr = samples.cool.values[0]
     if max_dist is not None:
@@ -519,7 +537,9 @@ def change_detection_pipeline(
         # If positions were provided, return the change value for each of them
         if bed2d_file:
             tmp_chr = reg.split(":")[0]
-            tmp_rows = (positions.chrom1 == tmp_chr) & (positions.chrom2 == tmp_chr)
+            tmp_rows = (positions.chrom1 == tmp_chr) & (
+                positions.chrom2 == tmp_chr
+            )
             # If there are no positions of interest on this chromosome, just
             # skip it
             if not np.any(tmp_rows):
@@ -528,7 +548,9 @@ def change_detection_pipeline(
             # Convert both coordinates from genomic coords to bins
             for i in [1, 2]:
                 tmp_pos["chrom"] = tmp_pos[f"chrom{i}"]
-                tmp_pos["pos"] = (tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]) // 2
+                tmp_pos["pos"] = (
+                    tmp_pos[f"start{i}"] + tmp_pos[f"end{i}"]
+                ) // 2
                 tmp_pos[f"bin{i}"] = coords_to_bins(clr, tmp_pos).astype(int)
                 # Save bin coordinates from current chromosome to the full table
                 positions.loc[tmp_rows, f"bin{i}"] = tmp_pos[f"bin{i}"]
