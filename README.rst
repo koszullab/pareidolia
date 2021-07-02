@@ -9,6 +9,10 @@ pareidolia
    :target: https://github.com/koszullab/pareidolia/actions/workflows/python-package.yml
    :alt: build
 
+.. image:: https://readthedocs.org/projects/pareidolia/badge/?version=latest
+   :target: https://pareidolia.readthedocs.io/en/latest/?badge=latest
+   :alt: Documentation Status
+
 .. image:: https://codecov.io/gh/koszullab/pareidolia/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/koszullab/pareidolia
 
