@@ -1,0 +1,7 @@
+name: pareidolia
+dependencies:
+  - pareidolia
+  - notebook
+  - sphinx
+  - nbsphinx
+  - recommonmark
