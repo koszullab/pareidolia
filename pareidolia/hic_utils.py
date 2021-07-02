@@ -260,7 +260,8 @@ def detection_matrix(
     if max_dist is None:
         trim_dist = None
     else:
-        trim_dist = max_dist + max(kernel.shape)
+        mat_size = samples.cool[0].matrix(sparse=True).fetch(region).shape[0]
+        trim_dist = min(mat_size, max_dist + max(kernel.shape))
     # Compute number of contacts in the matrix with the lowest coverage
     if subsample:
         min_contacts = get_min_contacts(samples.cool, region=region)
@@ -290,9 +291,10 @@ def detection_matrix(
     common_bins = pap.get_common_valid_bins(samples["mat"])
     # Trim diagonals beyond max_dist (with kernel margin for the convolution)
     # to spare resources
-    samples["mat"] = map_fun(
-        cup.diag_trim, zip(samples["mat"], it.repeat(trim_dist))
-    )
+    if trim_dist is not None:
+        samples["mat"] = map_fun(
+            cup.diag_trim, zip(samples["mat"], it.repeat(trim_dist))
+        )
     # Generate a missing mask from these bins
     missing_mask = cup.make_missing_mask(
         samples["mat"][0].shape,
@@ -301,7 +303,7 @@ def detection_matrix(
         max_dist=trim_dist,
         sym_upper=sym_upper,
     )
-    # Remove all missing values form each sample's matrix
+    # Remove all missing values from each sample's matrix
     samples["mat"] = map_fun(
         cup.erase_missing,
         zip(
@@ -347,7 +349,6 @@ def detection_matrix(
     samples["mat"] = samples["mat"].apply(
         lambda cor: pap.fill_nnz(cor, total_nnz_set)
     )
-
     # Erase pixels where all samples are below pearson threshold
     if pearson_thresh is not None:
         pearson_fail = [
