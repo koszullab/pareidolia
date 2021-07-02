@@ -142,7 +142,7 @@ def pareidolia_cmd(
     # If the kernel name is not valid, assumes it's a custom kernel file
     except AttributeError:
         try:
-            _ = np.loadtxt(kernel)
+            kernel = np.loadtxt(kernel)
         except OSError:
             raise ValueError(
                 "kernel must either be a valid kernel name or path to a"
