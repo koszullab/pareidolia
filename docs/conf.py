@@ -40,6 +40,7 @@ extensions = [
     "sphinx.ext.ifconfig",
     "sphinx.ext.viewcode",
     "sphinx.ext.githubpages",
+    "recommonmark",
     "nbsphinx",
 ]
 
@@ -75,5 +76,5 @@ intersphinx_mapping = {
     "numpy": ("https://docs.scipy.org/doc/numpy/", None),
 }
 
-source_parsers = {".md": "recommonmark.parser.CommonMarkParser"}
+source_parsers = {".md": "CommonMarkParser"}
 autodoc_typehints = "description"
