@@ -16,6 +16,9 @@ pareidolia
 .. image:: https://codecov.io/gh/koszullab/pareidolia/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/koszullab/pareidolia
 
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.5062484.svg
+   :target: https://doi.org/10.5281/zenodo.5062484
+
 Multi-sample change detection in Hi-C patterns
 
 Pareidolia for detects changes in intensities of a specific pattern (e.g. chromatin loops and domain borders) from Hi-C maps.
@@ -84,3 +87,9 @@ If a list of positions was provided, the filtered differential scores are return
 .. image:: docs/img/pareidolia_process.png
 
 
+Citation
+--------
+
+If you use Pareidolia in your research, you can cite the software as follows (see the `Zenodo <https://zenodo.org/record/5062484>`_ page to cite a specific version):
+
+Cyril Matthey-Doret. (2021, July 2). koszullab/pareidolia. Zenodo. https://doi.org/10.5281/zenodo.5062484
