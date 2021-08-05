@@ -21,7 +21,7 @@ pareidolia
 
 Multi-sample change detection in Hi-C patterns
 
-Pareidolia for detects changes in intensities of a specific pattern (e.g. chromatin loops and domain borders) from Hi-C maps.
+Pareidolia detects changes in intensities for a specific pattern (e.g. chromatin loops and domain borders) from Hi-C maps.
 It can be used to compare samples from different conditions and use multiple replicates to improve results.
 
 This toolkit exploits `Chromosight <https://github.com/koszullab/chromosight>`_ correlation maps, allowing the same method to detect changes in different Hi-C patterns (e.g. loops or borders).
@@ -65,8 +65,51 @@ Pareidolia can either detect changes *de-novo*, or compute the change intensity 
 The input positions can be provided as a bed2d (=bedpe) file, containing a list of 2D genomic coordinates.
 This file can be provided with the `--bed2d-file` option on the CLI, or using the `bed2d_file` parameter in the python API.
 
-Padeidolia accepts chromosight kernels as kernel names. A list of valid kernels can be displayed using `chromosight list-kernels`.
+Pareidolia accepts chromosight kernels as kernel names. A list of valid kernels can be displayed using `chromosight list-kernels`.
+
 Alternatively, when using the API, an arbitrary 2D numpy array can be provided as kernels.
+
+The options shown below allow to customize pareidolia's behavior. These options are further discussed in the tutorial, available on the `documentation website <https://pareidolia.readthedocs.io/en/latest/TUTORIAL.html>`_ .
+
+.. code-block::
+
+        Usage: pareidolia [OPTIONS] COOL_FILES CONDITIONS OUTFILE
+
+          Run the pattern change detection pipeline
+
+        Options:
+          -b, --bed2d-file PATH   Optional bed2d file containing pattern positions
+                                  where changes should be measured (instead of
+                                  detecting).
+          -k, --kernel TEXT       A kernel name or a tab-separated text file
+                                  containing a square kernel matrix. Valid kernel
+                                  names are: loops, borders, centromeres, hairpins.
+                                  [default: loops]
+          -r, --region TEXT       Optional comma-separated list of regions in UCSC
+                                  format (e.g. chr1:1000-40000) at which detection
+                                  should operate.
+          -M, --max-dist INTEGER  Maximum interaction distance (in basepairs) at which
+                                  patterns should be detected. Reduce to accelerate
+                                  detection and reduce memory usage.
+          -p, --pearson FLOAT     Threshold to apply when detecting pattern changes. A
+                                  default value is selected based on the kernel.
+          -D, --density FLOAT     Minimum proportion of nonzero pixels required to
+                                  consider a region. Smaller values allows lower
+                                  coverage regions, but increase false positives.
+                                  [default: 0.1]
+          -s, --snr FLOAT         Signal-to-noise-ratio threshold used to filter out
+                                  positions with high technical variations relative to
+                                  biological variations.  [default: 1.0]
+          -S, --no-subsample      Disable subsampling of input matrices to the same
+                                  coverage.
+          -F, --no-filter         Completely disable pearson, snr and density
+                                  filtering. Mostly for debugging. All input positions
+                                  are returned, but results will be noisy.
+          -n, --n-cpus INTEGER    Number of CPUs to use for parallel tasks. It is
+                                  recommended to set at most to the number of input
+                                  samples.
+          --version               Show the version and exit.
+          --help                  Show this message and exit.
 
 
 Algorithm
