@@ -1,6 +1,6 @@
 FROM continuumio/miniconda3:4.8.2
 
-LABEL Name=pareidolia Version=0.6.1
+LABEL Name=pareidolia Version=0.6.2
 
 COPY * ./ /app/
 WORKDIR /app

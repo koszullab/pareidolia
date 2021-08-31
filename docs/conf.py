@@ -22,7 +22,7 @@ copyright = "2021, Cyril Matthey-Doret"
 author = "Cyril Matthey-Doret"
 
 # The full version, including alpha/beta/rc tags
-release = "v0.6.1"
+release = "v0.6.2"
 
 
 # -- General configuration ---------------------------------------------------
