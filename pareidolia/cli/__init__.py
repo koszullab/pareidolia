@@ -134,7 +134,11 @@ def pareidolia_cmd(
     snr,
     n_cpus,
 ):
-    """Run the pattern change detection pipeline"""
+    """Run the pattern change detection pipeline. Given a list of cool files
+    and associated conditions, compute pattern intensity change from one condition
+    relative to the control. The first condition occuring in the list is the control.
+    For all patterns that pass the quality filters, a differential score
+    (condition - control) and a signal-to-noise ratio are returned."""
 
     # Attempt to load chromosight kernel from the kernel name.
     try:

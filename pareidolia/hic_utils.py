@@ -372,7 +372,6 @@ def detection_matrix(
     # Remove all values beyond user-specified max_dist
     if max_dist is not None:
         diff = cup.diag_trim(diff, max_dist + 2)
-
     return diff, snr
 
 
@@ -400,16 +399,14 @@ def change_detection_pipeline(
     matrix can be supplied directly instead. maximum scanning distance can be
     specified directly (in basepairs) to override the kernel default value.
 
-    Positions with significant changes will be reported in a pandas
-    dataframe. Significance is determined based on the percentile threshold,
-    between 1 and 100. Optionally, a 2D bed file with positions of interest can
-    be specified, in which case change value at these positions will be
-    reported instead. When using a bed2d file, the threshold is optional (one
-    can report either scores at all positions, or only where they are
-    significant).
-
     Positive diff_scores mean the pattern intensity was increased relative to
     control (first condition).
+
+    Positions with significant changes will be reported in a pandas
+    dataframe. In addition to the score, a signal-to-noise ratio between 0 and
+    10 is given to give an estimation of the signal quality. Optionally, a 2D
+    bed file with positions of interest can be specified, in which case change
+    value at these positions will be reported instead. When using a bed2d file.
 
     Parameters
     ----------
