@@ -15,7 +15,7 @@ def read(filename):
 
 setup(
     name="pareidolia",
-    version="0.6.2",
+    version="1.0.0",
     url="https://github.com/cmdoret/pareidolia",
     license='MIT',
     author="Cyril Matthey-Doret",
@@ -26,7 +26,7 @@ setup(
     install_requires=read('requirements.txt').splitlines(),
     entry_points={"console_scripts": ["pareidolia=pareidolia.cli:pareidolia_cmd"]},
     classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python',
