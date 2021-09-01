@@ -79,12 +79,12 @@ from .. import __version__
     type=float,
 )
 @click.option(
-    "--snr",
-    "-s",
+    "--cnr",
+    "-c",
     default=1.0,
     show_default=True,
     help=(
-        "Signal-to-noise-ratio threshold used to filter out positions with "
+        "Contrast-to-noise-ratio threshold used to filter out positions with "
         "high technical variations relative to biological variations."
     ),
     type=float,
@@ -100,7 +100,7 @@ from .. import __version__
     "-F",
     is_flag=True,
     help=(
-        "Completely disable pearson, snr and density filtering. Mostly "
+        "Completely disable pearson, cnr and density filtering. Mostly "
         "for debugging. All input positions are returned, but results "
         "will be noisy."
     ),
@@ -131,14 +131,14 @@ def pareidolia_cmd(
     no_filter,
     pearson,
     density,
-    snr,
+    cnr,
     n_cpus,
 ):
     """Run the pattern change detection pipeline. Given a list of cool files
     and associated conditions, compute pattern intensity change from one condition
     relative to the control. The first condition occuring in the list is the control.
     For all patterns that pass the quality filters, a differential score
-    (condition - control) and a signal-to-noise ratio are returned."""
+    (condition - control) and a contrast-to-noise ratio are returned."""
 
     # Attempt to load chromosight kernel from the kernel name.
     try:
@@ -154,7 +154,7 @@ def pareidolia_cmd(
             )
     # Disable all filters if requested
     if no_filter:
-        snr = density = None
+        cnr = density = None
         pearson = 0.0
     # Get lists from comma-separated items
     cool_files = _parse_cli_list(cool_files)
@@ -171,7 +171,7 @@ def pareidolia_cmd(
         subsample=not no_subsample,
         pearson_thresh=pearson,
         density_thresh=density,
-        snr_thresh=snr,
+        cnr_thresh=cnr,
         n_cpus=n_cpus,
     )
 

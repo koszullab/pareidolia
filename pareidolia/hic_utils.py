@@ -197,13 +197,13 @@ def _ttest_matrix(
 def _median_bg_subtraction(
     samples: pd.DataFrame,
     control: str,
-    snr_thresh: Optional[float] = 1.0,
-    snr_max: float = 10.0,
+    cnr_thresh: Optional[float] = 1.0,
+    cnr_max: float = 10.0,
 ) -> Tuple[sp.csr_matrix, sp.csr_matrix]:
     """
     Performs the median background subtraction to extract differential signal
     from multiple Hi-C matrix. Returns the filtered differential matrix and
-    the signal-to-noise-ratio matrix used for the filtering.
+    the contrast-to-noise-ratio matrix used for the filtering.
     """
     # Compute background for each condition
     backgrounds = samples.groupby("cond")["mat"].apply(
@@ -214,29 +214,29 @@ def _median_bg_subtraction(
         lambda g: pad.get_sse_mat(g.reset_index(drop=True))
     )
     conditions = np.unique(samples.cond)
-    # Compute difference between conditions and signal
+    # Compute difference between conditions and contrast
     # to noise ratio
-    snr = sse[0].copy()
-    snr.data = np.zeros(sse[0].data.shape)
+    cnr = sse[0].copy()
+    cnr.data = np.zeros(sse[0].data.shape)
     diff = sp.csr_matrix(sse[0].shape)
     for c in conditions:
-        if snr_thresh is not None:
-            snr.data += backgrounds[c].data / np.sqrt(sse[c].data)
+        if cnr_thresh is not None:
+            cnr.data += backgrounds[c].data / np.sqrt(sse[c].data)
         if c != control:
             # Break ties to preserve sparsity (do not introduce 0s)
             ties = backgrounds[c].data == backgrounds[control].data
             backgrounds[c].data[ties] += 1e-08
             diff += backgrounds[c] - backgrounds[control]
-    snr.data /= len(conditions)
+    cnr.data /= len(conditions)
     # Erase spurious or extreme values
-    snr.data[snr.data < 0.0] = 0.0
-    snr.data[snr.data > snr_max] = snr_max
+    cnr.data[cnr.data < 0.0] = 0.0
+    cnr.data[cnr.data > cnr_max] = cnr_max
     # Use average difference to first background as change metric
     diff.data /= len(conditions) - 1
     # Threshold data on background / sse value
-    if snr_thresh is not None:
-        diff.data[snr.data < snr_thresh] = 0.0
-    return diff, snr
+    if cnr_thresh is not None:
+        diff.data[cnr.data < cnr_thresh] = 0.0
+    return diff, cnr
 
 
 def detection_matrix(
@@ -247,7 +247,7 @@ def detection_matrix(
     max_dist: Optional[int] = None,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = None,
-    snr_thresh: Optional[float] = 1.0,
+    cnr_thresh: Optional[float] = 1.0,
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[sp.csr_matrix]]:
     """
@@ -364,7 +364,7 @@ def detection_matrix(
         pool.close()
 
     # Use median background
-    diff, snr = _median_bg_subtraction(samples, control, snr_thresh)
+    diff, cnr = _median_bg_subtraction(samples, control, cnr_thresh)
 
     # Erase pixels which do not pass the density filter in all samples
     if (density_thresh is not None) and (density_thresh > 0):
@@ -372,7 +372,7 @@ def detection_matrix(
     # Remove all values beyond user-specified max_dist
     if max_dist is not None:
         diff = cup.diag_trim(diff, max_dist + 2)
-    return diff, snr
+    return diff, cnr
 
 
 def change_detection_pipeline(
@@ -386,7 +386,7 @@ def change_detection_pipeline(
     subsample: bool = True,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = 0.10,
-    snr_thresh: Optional[float] = 1.0,
+    cnr_thresh: Optional[float] = 1.0,
     n_cpus: int = 4,
 ) -> pd.DataFrame:
     """
@@ -403,7 +403,7 @@ def change_detection_pipeline(
     control (first condition).
 
     Positions with significant changes will be reported in a pandas
-    dataframe. In addition to the score, a signal-to-noise ratio between 0 and
+    dataframe. In addition to the score, a contrast-to-noise ratio between 0 and
     10 is given to give an estimation of the signal quality. Optionally, a 2D
     bed file with positions of interest can be specified, in which case change
     value at these positions will be reported instead. When using a bed2d file.
@@ -506,18 +506,18 @@ def change_detection_pipeline(
         "bin1",
         "bin2",
         "diff_score",
-        "snr",
+        "cnr",
     ]
     if bed2d_file:
         positions = cio.load_bed2d(bed2d_file)
-        for col in ["diff_score", "snr", "bin1", "bin2"]:
+        for col in ["diff_score", "cnr", "bin1", "bin2"]:
             positions[col] = np.nan
     else:
         positions = pd.DataFrame(columns=pos_cols)
     for reg in regions:
         # Subset bins to the range of interest
         bins = clr.bins().fetch(reg).reset_index(drop=True)
-        diff, snr = detection_matrix(
+        diff, cnr = detection_matrix(
             samples,
             kernel,
             region=reg,
@@ -526,7 +526,7 @@ def change_detection_pipeline(
             pearson_thresh=pearson_thresh,
             density_thresh=density_thresh,
             n_cpus=n_cpus,
-            snr_thresh=snr_thresh,
+            cnr_thresh=cnr_thresh,
         )
 
         # If the matrix was too small or no difference was found, skip it
@@ -557,7 +557,7 @@ def change_detection_pipeline(
             positions.loc[tmp_rows, "diff_score"] = diff[
                 tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize
             ].A1
-            positions.loc[tmp_rows, "snr"] = snr[
+            positions.loc[tmp_rows, "cnr"] = cnr[
                 tmp_pos.start1 // clr.binsize, tmp_pos.start2 // clr.binsize
             ].A1
         # Otherwise report individual spots of change using chromosight
@@ -586,7 +586,7 @@ def change_detection_pipeline(
             # No position found, go to next region
             except AttributeError:
                 continue
-            tmp_pos["snr"] = snr[tmp_pos.bin1, tmp_pos.bin2].A1
+            tmp_pos["cnr"] = cnr[tmp_pos.bin1, tmp_pos.bin2].A1
             # Append new chromosome's rows
             positions = pd.concat([positions, tmp_pos], axis=0)
             # For 1D patterns (e.g. borders) set diagonal positions.

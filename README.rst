@@ -73,43 +73,47 @@ The options shown below allow to customize pareidolia's behavior. These options 
 
 .. code-block::
 
-        Usage: pareidolia [OPTIONS] COOL_FILES CONDITIONS OUTFILE
-
-          Run the pattern change detection pipeline
-
-        Options:
-          -b, --bed2d-file PATH   Optional bed2d file containing pattern positions
-                                  where changes should be measured (instead of
-                                  detecting).
-          -k, --kernel TEXT       A kernel name or a tab-separated text file
-                                  containing a square kernel matrix. Valid kernel
-                                  names are: loops, borders, centromeres, hairpins.
-                                  [default: loops]
-          -r, --region TEXT       Optional comma-separated list of regions in UCSC
-                                  format (e.g. chr1:1000-40000) at which detection
-                                  should operate.
-          -M, --max-dist INTEGER  Maximum interaction distance (in basepairs) at which
-                                  patterns should be detected. Reduce to accelerate
-                                  detection and reduce memory usage.
-          -p, --pearson FLOAT     Threshold to apply when detecting pattern changes. A
-                                  default value is selected based on the kernel.
-          -D, --density FLOAT     Minimum proportion of nonzero pixels required to
-                                  consider a region. Smaller values allows lower
-                                  coverage regions, but increase false positives.
-                                  [default: 0.1]
-          -s, --snr FLOAT         Signal-to-noise-ratio threshold used to filter out
-                                  positions with high technical variations relative to
-                                  biological variations.  [default: 1.0]
-          -S, --no-subsample      Disable subsampling of input matrices to the same
-                                  coverage.
-          -F, --no-filter         Completely disable pearson, snr and density
-                                  filtering. Mostly for debugging. All input positions
-                                  are returned, but results will be noisy.
-          -n, --n-cpus INTEGER    Number of CPUs to use for parallel tasks. It is
-                                  recommended to set at most to the number of input
-                                  samples.
-          --version               Show the version and exit.
-          --help                  Show this message and exit.
+    Usage: pareidolia [OPTIONS] COOL_FILES CONDITIONS OUTFILE
+    
+      Run the pattern change detection pipeline. Given a list of cool files and
+      associated conditions, compute pattern intensity change from one condition
+      relative to the control. The first condition occuring in the list is the
+      control. For all patterns that pass the quality filters, a differential
+      score (condition - control) and a contrast-to-noise ratio are returned.
+    
+    Options:
+      -b, --bed2d-file PATH   Optional bed2d file containing pattern positions
+                              where changes should be measured (instead of
+                              detecting).
+      -c, --cnr FLOAT         Contrast to-noise-ratio threshold used to filter out
+                              positions with high technical variations relative to
+                              biological variations.  [default: 1.0]
+      -k, --kernel TEXT       A kernel name or a tab-separated text file
+                              containing a square kernel matrix. Valid kernel
+                              names are: loops, borders, centromeres, hairpins.
+                              [default: loops]
+      -r, --region TEXT       Optional comma-separated list of regions in UCSC
+                              format (e.g. chr1:1000-40000) at which detection
+                              should operate.
+      -M, --max-dist INTEGER  Maximum interaction distance (in basepairs) at which
+                              patterns should be detected. Reduce to accelerate
+                              detection and reduce memory usage.
+      -p, --pearson FLOAT     Threshold to apply when detecting pattern changes. A
+                              default value is selected based on the kernel.
+      -D, --density FLOAT     Minimum proportion of nonzero pixels required to
+                              consider a region. Smaller values allows lower
+                              coverage regions, but increase false positives.
+                              [default: 0.1]
+      -S, --no-subsample      Disable subsampling of input matrices to the same
+                              coverage.
+      -F, --no-filter         Completely disable pearson, cnr and density
+                              filtering. Mostly for debugging. All input positions
+                              are returned, but results will be noisy.
+      -n, --n-cpus INTEGER    Number of CPUs to use for parallel tasks. It is
+                              recommended to set at most to the number of input
+                              samples.
+      --version               Show the version and exit.
+      --help                  Show this message and exit.
 
 
 Algorithm
@@ -120,7 +124,7 @@ Pareidolia starts by running Chromosight's convolution algorithm on each input s
 A differential background matrix is computed by subtracting backgrounds from the different conditions. Pareidolia then applies a series of filtering steps to discard noisy regions. Three filters are applied, each with their respective threshold:
 
 * Pearson threshold: Only regions where at least one input sample has a pearson coefficient above this threshold are considered.
-* snr threshold: Signal-to-noise-ratio filter to discard regions where the intra-condition variability is low compared to the inter-condition difference.
+* CNR threshold: Contrast-to-noise-ratio filter to discard regions where the intra-condition variability is low compared to the inter-condition difference.
 * Density threshold: Coverage-based filter to remove very sparse regions. If the proportion of non-empty pixels used to compute the correlation score is below that threshold, the value is discarded.
 
 Each filter can be selectively disabled, or its threshold adapted using command line options.
