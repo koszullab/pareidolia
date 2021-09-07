@@ -85,7 +85,7 @@ def test_change_detection(kernel, coords):
         if tuple(target.astype(int)) in valid_pos:
             found += 1
     print(f"Found {found} out of {coords.shape[0]} loops.")
-    assert found / coords.shape[0] >= 0.5
+    assert found / coords.shape[0] >= 0.4
 
 
 def test_change_quantification():
@@ -94,10 +94,7 @@ def test_change_quantification():
     cools = COOLS + COOLS_COMP
     conds = ["B"] * len(COOLS) + ["S"] * len(COOLS_COMP)
     obs_pos = pah.change_detection_pipeline(
-        cools,
-        conds,
-        bed2d_file=str(DATA / "B_loops.bed2d"),
-        subsample=False,
+        cools, conds, bed2d_file=str(DATA / "B_loops.bed2d"), subsample=False,
     )
     diff = obs_pos.diff_score
     # Check if change was detected in the correct direction (disappearing)

@@ -220,12 +220,13 @@ def _median_bg_subtraction(
     cnr.data = np.zeros(sse[0].data.shape)
     diff = sp.csr_matrix(sse[0].shape)
     for c in conditions:
-        cnr.data += backgrounds[c].data / np.sqrt(sse[c].data)
         if c != control:
             # Break ties to preserve sparsity (do not introduce 0s)
             ties = backgrounds[c].data == backgrounds[control].data
             backgrounds[c].data[ties] += 1e-08
-            diff += backgrounds[c] - backgrounds[control]
+            curr_diff = backgrounds[c] - backgrounds[control]
+            diff += curr_diff
+            cnr.data += np.abs(curr_diff.data) / np.sqrt(sse[c].data)
     cnr.data /= len(conditions)
     # Erase spurious or extreme values
     cnr.data[cnr.data < 0.0] = 0.0
