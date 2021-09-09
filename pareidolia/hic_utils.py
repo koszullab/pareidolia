@@ -197,7 +197,7 @@ def _ttest_matrix(
 def _median_bg_subtraction(
     samples: pd.DataFrame,
     control: str,
-    cnr_thresh: Optional[float] = 1.0,
+    cnr_thresh: Optional[float] = 0.3,
     cnr_max: float = 10.0,
 ) -> Tuple[sp.csr_matrix, sp.csr_matrix]:
     """
@@ -247,7 +247,7 @@ def detection_matrix(
     max_dist: Optional[int] = None,
     pearson_thresh: Optional[float] = None,
     density_thresh: Optional[float] = None,
-    cnr_thresh: Optional[float] = 1.0,
+    cnr_thresh: Optional[float] = 0.3,
     n_cpus: int = 4,
 ) -> Tuple[Optional[sp.csr_matrix], Optional[sp.csr_matrix]]:
     """

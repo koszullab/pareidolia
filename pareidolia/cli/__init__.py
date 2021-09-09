@@ -81,7 +81,7 @@ from .. import __version__
 @click.option(
     "--cnr",
     "-c",
-    default=1.0,
+    default=0.3,
     show_default=True,
     help=(
         "Contrast-to-noise-ratio threshold used to filter out positions with "
