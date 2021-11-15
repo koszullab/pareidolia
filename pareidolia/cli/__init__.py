@@ -6,6 +6,7 @@ change detection pipeline.
 import click
 import numpy as np
 import chromosight.kernels as ck
+import random
 from .. import hic_utils as pah
 from .. import __version__
 
@@ -115,6 +116,13 @@ from .. import __version__
         "at most to the number of input samples."
     ),
 )
+@click.option(
+    "--random-seed",
+    "-s",
+    default=None,
+    type=int,
+    help="Select a random seed to make subsampling deterministic.",
+)
 @click.argument("cool_files", type=str)
 @click.argument("conditions", type=str)
 @click.argument("outfile", type=str)
@@ -133,6 +141,7 @@ def pareidolia_cmd(
     density,
     cnr,
     n_cpus,
+    random_seed,
 ):
     """Run the pattern change detection pipeline. Given a list of cool files
     and associated conditions, compute pattern intensity change from one condition
@@ -159,6 +168,11 @@ def pareidolia_cmd(
     # Get lists from comma-separated items
     cool_files = _parse_cli_list(cool_files)
     conditions = _parse_cli_list(conditions)
+
+    # Make pseudo-random number generation deterministic
+    if random_seed is not None:
+        random.seed(random_seed)
+        np.random.seed(random_seed)
 
     # Start the detection pipeline
     changes = pah.change_detection_pipeline(
