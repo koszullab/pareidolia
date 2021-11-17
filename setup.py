@@ -12,10 +12,17 @@ def read(filename):
     with io.open(filename, mode="r", encoding='utf-8') as fd:
         return re.sub(text_type(r':[a-z]+:`~?(.*?)`'), text_type(r'``\1``'), fd.read())
 
+with open("pareidolia/__init__.py", "r") as init:
+    init_conts = init.read()
+    vers_regex = r"^__version__ = ['\"]([^'\"]*)['\"]"
+    try:
+        VERSION = re.search(vers_regex, init_conts, re.MULTILINE)[1]
+    except TypeError:
+        raise RuntimeError(f"Cannot find version string in __init__.py")
 
 setup(
     name="pareidolia",
-    version="1.1.0",
+    version=VERSION,
     url="https://github.com/cmdoret/pareidolia",
     license='MIT',
     author="Cyril Matthey-Doret",
