@@ -47,6 +47,10 @@ def test_change_detection():
         [
             cools,
             conds,
+            "--min-dist",
+            100,
+            "--max-dist",
+            100000,
             "--bed2d-file",
             str(DATA / "B_loops.bed2d"),
             out_f.name,

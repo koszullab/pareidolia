@@ -45,6 +45,17 @@ from .. import __version__
     ),
 )
 @click.option(
+    "--min-dist",
+    "-m",
+    default=None,
+    show_default=True,
+    help=(
+        "Minimum interaction distance (in basepairs) at which patterns should"
+        " be detected. No lower limit by default."
+    ),
+    type=int,
+)
+@click.option(
     "--max-dist",
     "-M",
     default=None,
@@ -134,6 +145,7 @@ def pareidolia_cmd(
     kernel,
     bed2d_file,
     region,
+    min_dist,
     max_dist,
     no_subsample,
     no_filter,
@@ -181,6 +193,7 @@ def pareidolia_cmd(
         kernel=kernel,
         bed2d_file=bed2d_file,
         region=region,
+        min_dist=min_dist,
         max_dist=max_dist,
         subsample=not no_subsample,
         pearson_thresh=pearson,
