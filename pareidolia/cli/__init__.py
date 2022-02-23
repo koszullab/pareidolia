@@ -193,7 +193,7 @@ def pareidolia_cmd(
         kernel=kernel,
         bed2d_file=bed2d_file,
         region=region,
-        max_dist=min_dist,
+        min_dist=min_dist,
         max_dist=max_dist,
         subsample=not no_subsample,
         pearson_thresh=pearson,
